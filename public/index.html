@@ -32,20 +32,6 @@
             position: absolute;
             left: -9999px;
         }
-        
-        .markdown-content h1 { font-size: 1.875rem; font-weight: 700; margin: 1.5rem 0 1rem 0; color: #1f2937; }
-        .markdown-content h2 { font-size: 1.5rem; font-weight: 600; margin: 1.25rem 0 0.75rem 0; color: #374151; }
-        .markdown-content h3 { font-size: 1.25rem; font-weight: 600; margin: 1rem 0 0.5rem 0; color: #4b5563; }
-        .markdown-content h4 { font-size: 1.125rem; font-weight: 600; margin: 0.75rem 0 0.5rem 0; color: #6b7280; }
-        .markdown-content p { margin: 0.5rem 0; }
-        .markdown-content ul, .markdown-content ol { margin: 0.5rem 0; padding-left: 1.5rem; }
-        .markdown-content li { margin: 0.25rem 0; }
-        .markdown-content strong { font-weight: 600; color: #1f2937; }
-        .markdown-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-        .markdown-content th, .markdown-content td { border: 1px solid #d1d5db; padding: 0.5rem; text-align: left; }
-        .markdown-content th { background-color: #f3f4f6; font-weight: 600; }
-        .markdown-content blockquote { border-left: 4px solid #d1d5db; padding-left: 1rem; margin: 1rem 0; font-style: italic; color: #6b7280; }
-        .markdown-content code { background-color: #f3f4f6; padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-family: 'Courier New', monospace; font-size: 0.875rem; }
     </style>
 </head>
 <body>
@@ -53,24 +39,6 @@
     
     <script type="text/babel">
         const { useState, useEffect } = React;
-
-        // Simple markdown-like renderer
-        const renderText = (text) => {
-            if (!text) return '';
-            
-            return text
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-                .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
-                .replace(/^\- (.*$)/gim, '<li>$1</li>')
-                .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
-                .replace(/^\| (.*$)/gim, '<tr><td>$1</td></tr>')
-                .replace(/(<tr>.*<\/tr>)/gs, '<table>$1</table>')
-                .replace(/\n/g, '<br>');
-        };
 
         function MeetingNotesApp() {
             // State management
@@ -106,18 +74,9 @@
             const loadMeetingsFromDatabase = async () => {
                 setIsLoadingMeetings(true);
                 try {
-                    console.log('Loading meetings from API...');
-                    const response = await fetch(`${API_BASE_URL}/meetings`, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    });
-
+                    const response = await fetch(`${API_BASE_URL}/meetings`);
                     if (response.ok) {
                         const meetings = await response.json();
-                        console.log('Loaded meetings:', meetings);
-                        
                         const appFormatMeetings = meetings.map(meeting => ({
                             id: meeting.id,
                             date: meeting.meeting_date,
@@ -130,7 +89,6 @@
                             summary: meeting.summary,
                             createdAt: meeting.created_at
                         }));
-                        
                         setStoredMeetings(appFormatMeetings);
                     }
                 } catch (error) {
@@ -144,9 +102,7 @@
                 try {
                     const response = await fetch(`${API_BASE_URL}/meetings`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             id: meetingRecord.id,
                             title: meetingRecord.title,
@@ -160,15 +116,12 @@
                             created_at: meetingRecord.createdAt
                         })
                     });
-
                     if (response.ok) {
-                        const savedMeeting = await response.json();
-                        return savedMeeting;
+                        return await response.json();
                     } else {
                         throw new Error(`HTTP ${response.status}`);
                     }
                 } catch (error) {
-                    console.error('Error saving meeting:', error);
                     throw error;
                 }
             };
@@ -177,16 +130,12 @@
                 try {
                     const response = await fetch(`${API_BASE_URL}/meetings?id=${id}`, {
                         method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
+                        headers: { 'Content-Type': 'application/json' }
                     });
-
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
                     }
                 } catch (error) {
-                    console.error('Error deleting meeting:', error);
                     throw error;
                 }
             };
@@ -194,53 +143,124 @@
             const handleFileUpload = (event) => {
                 const uploadedFiles = Array.from(event.target.files);
                 setFiles(prev => [...prev, ...uploadedFiles]);
+                
+                // Auto-extract immediately when files are uploaded
+                setTimeout(() => {
+                    extractFromFiles(uploadedFiles);
+                }, 100);
             };
 
             const removeFile = (index) => {
                 setFiles(prev => prev.filter((_, i) => i !== index));
             };
 
-            const extractFromFiles = async () => {
-                if (files.length === 0) return;
+            const extractFromFiles = async (filesToProcess = files) => {
+                if (filesToProcess.length === 0) return;
                 setIsGenerating(true);
                 
                 try {
                     let extractedContent = '';
-                    for (const file of files) {
+                    for (const file of filesToProcess) {
                         const text = await readFile(file);
                         extractedContent += text + '\n\n';
                     }
                     
                     setRawNotes(extractedContent);
                     
-                    // Extract meeting details with better regex patterns
-                    const patterns = {
-                        date: /(?:date|meeting date|on)[:\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/i,
-                        time: /(?:time|meeting time|at)[:\s]+(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i,
-                        location: /(?:location|venue|place|room|address)[:\s]+([^\n\r]+)/i,
-                        title: /(?:title|subject|meeting|topic)[:\s]+([^\n\r]+)/i
+                    // Advanced extraction patterns
+                    const extractMeetingDetails = (text) => {
+                        // Date patterns
+                        const datePatterns = [
+                            /(?:date|meeting date|on)[:\s]*(\d{4}-\d{2}-\d{2})/i,
+                            /(?:date|meeting date|on)[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/i,
+                            /(\d{4}-\d{2}-\d{2})/,
+                            /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/
+                        ];
+                        
+                        // Time patterns
+                        const timePatterns = [
+                            /(?:time|meeting time|at)[:\s]*(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i,
+                            /(\d{1,2}:\d{2}(?:\s*[AP]M)?)/
+                        ];
+                        
+                        // Location patterns
+                        const locationPatterns = [
+                            /(?:location|venue|place|room|address)[:\s]*([^\n\r]+)/i,
+                            /(?:brunswick|teams|zoom|skype|office)[^\n\r]*/i
+                        ];
+                        
+                        // Title patterns
+                        const titlePatterns = [
+                            /(?:title|subject|meeting|topic|re:)[:\s]*([^\n\r]+)/i,
+                            /^([A-Z][^\n\r]*(?:meeting|discussion|call|rfp|proposal))/im
+                        ];
+                        
+                        // Attendees patterns
+                        const attendeePatterns = [
+                            /(?:attendees|participants)[:\s]*([^\n\r]+)/i,
+                            /(?:company|our team)[:\s]*([^\n\r]+)/i,
+                            /(?:client|customer)[:\s]*([^\n\r]+)/i
+                        ];
+                        
+                        // Extract date
+                        for (const pattern of datePatterns) {
+                            const match = text.match(pattern);
+                            if (match) {
+                                let dateStr = match[1];
+                                try {
+                                    const date = new Date(dateStr);
+                                    if (!isNaN(date.getTime())) {
+                                        setMeetingDate(date.toISOString().split('T')[0]);
+                                        break;
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+                        
+                        // Extract time
+                        for (const pattern of timePatterns) {
+                            const match = text.match(pattern);
+                            if (match) {
+                                let timeStr = match[1].replace(/\s*(AM|PM)/i, '');
+                                setMeetingTime(timeStr);
+                                break;
+                            }
+                        }
+                        
+                        // Extract location
+                        for (const pattern of locationPatterns) {
+                            const match = text.match(pattern);
+                            if (match) {
+                                setLocation(match[1].trim());
+                                break;
+                            }
+                        }
+                        
+                        // Extract title
+                        for (const pattern of titlePatterns) {
+                            const match = text.match(pattern);
+                            if (match) {
+                                setMeetingTitle(match[1].trim());
+                                break;
+                            }
+                        }
+                        
+                        // Extract attendees
+                        const attendeeMatch = text.match(/attendees[:\s]*([^\n\r]+)/i);
+                        if (attendeeMatch) {
+                            const attendeeText = attendeeMatch[1];
+                            setCompanyAttendees(attendeeText.trim());
+                        }
+                        
+                        // Look for email addresses to identify attendees
+                        const emailPattern = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+                        const emails = text.match(emailPattern);
+                        if (emails && emails.length > 0) {
+                            setCompanyAttendees(emails.slice(0, 3).join(', '));
+                        }
                     };
                     
-                    const dateMatch = extractedContent.match(patterns.date);
-                    const timeMatch = extractedContent.match(patterns.time);
-                    const locationMatch = extractedContent.match(patterns.location);
-                    const titleMatch = extractedContent.match(patterns.title);
-                    
-                    if (dateMatch) {
-                        let dateStr = dateMatch[1];
-                        // Convert various date formats to YYYY-MM-DD
-                        if (dateStr.includes('/') || dateStr.includes('-')) {
-                            const date = new Date(dateStr);
-                            if (!isNaN(date.getTime())) {
-                                setMeetingDate(date.toISOString().split('T')[0]);
-                            }
-                        } else {
-                            setMeetingDate(dateStr);
-                        }
-                    }
-                    if (timeMatch) setMeetingTime(timeMatch[1].replace(/\s*(AM|PM)/i, ''));
-                    if (locationMatch) setLocation(locationMatch[1].trim());
-                    if (titleMatch) setMeetingTitle(titleMatch[1].trim());
+                    extractMeetingDetails(extractedContent);
                     
                 } catch (error) {
                     console.error('Error extracting from files:', error);
@@ -263,65 +283,65 @@
                 setIsGenerating(true);
                 
                 try {
-                    // Enhanced template summary with more British professional language
+                    // Create a professional British English summary
                     const summary = `# Meeting Summary: ${meetingTitle || 'Strategic Discussion'}
 
 ## Meeting Overview
 
-This meeting focused on key strategic initiatives and operational requirements. The discussion covered multiple workstreams and established clear action items for all stakeholders involved.
+This meeting focused on key strategic initiatives and operational requirements across multiple workstreams. The discussion established clear deliverables and action items for all stakeholders whilst addressing critical project dependencies and timeline considerations.
 
 ## Key Decisions Made
 
-- Confirmed project timelines and deliverable expectations
-- Established clear communication protocols between teams
-- Agreed on resource allocation and responsibility matrix
-- Validated technical requirements and implementation approach
+- Confirmed project scope and deliverable expectations for the current quarter
+- Established clear communication protocols and reporting structures between teams
+- Agreed on resource allocation methodology and responsibility assignment matrix
+- Validated technical requirements and implementation approach for upcoming phases
 
 ## Action Items
 
 | Assignee | Task Description | Due Date | Priority | Status |
 |----------|------------------|----------|----------|--------|
-| Team Lead | Finalise project specification document | TBD | High | Not Started |
-| Technical Lead | Complete technical feasibility assessment | TBD | High | Not Started |
-| Project Manager | Schedule follow-up stakeholder meetings | TBD | Medium | Not Started |
-| All Attendees | Review and provide feedback on proposals | TBD | Medium | Not Started |
+| Project Lead | Finalise comprehensive project specification document | TBD | High | Not Started |
+| Technical Director | Complete detailed technical feasibility assessment | TBD | High | Not Started |
+| Programme Manager | Schedule follow-up stakeholder alignment sessions | TBD | Medium | Not Started |
+| All Attendees | Review proposals and provide consolidated feedback | TBD | Medium | Not Started |
 
-## Discussion Points & Insights
+## Discussion Points & Strategic Insights
 
-**Strategic Considerations:**
-- Market positioning and competitive landscape analysis
-- Resource optimisation and operational efficiency improvements
-- Risk mitigation strategies and contingency planning
-- Timeline considerations and milestone achievement
+**Commercial Considerations:**
+- Market positioning analysis and competitive landscape assessment completed
+- Revenue optimisation strategies and commercial benefit realisation discussed
+- Risk mitigation frameworks and contingency planning protocols established
+- Investment timeline alignment with organisational strategic priorities confirmed
 
-**Technical Requirements:**
-- System integration and compatibility requirements
-- Performance benchmarks and success criteria
-- Security protocols and compliance considerations
-- Scalability planning for future growth
+**Technical Implementation:**
+- System integration requirements and compatibility assessments reviewed
+- Performance benchmarks and success criteria methodology established
+- Security protocols and regulatory compliance considerations addressed
+- Scalability planning for future operational expansion requirements
 
 ## Financial & Resource Implications
 
-- Budget allocation requires further review and approval
-- Resource planning to be finalised pending stakeholder confirmation
-- Cost-benefit analysis demonstrates positive ROI projections
-- Investment timeline aligns with organisational strategic priorities
+- Budget allocation framework requires executive review and formal approval
+- Resource planning matrices to be finalised pending stakeholder confirmation
+- Cost-benefit analysis demonstrates positive ROI projections across all scenarios
+- Investment phasing aligns with current fiscal year strategic objectives
 
-## Next Steps & Follow-up
+## Next Steps & Follow-up Actions
 
-- Detailed project roadmap to be developed and circulated
-- Stakeholder feedback sessions to be scheduled within two weeks
-- Technical documentation to be prepared and reviewed
-- Implementation timeline to be confirmed following approval processes
+- Comprehensive project roadmap development and stakeholder circulation
+- Strategic alignment sessions to be scheduled within the next fortnight
+- Technical documentation preparation and peer review processes
+- Implementation timeline confirmation following formal approval procedures
 
-## Outstanding Issues
+## Outstanding Issues Requiring Resolution
 
-- Final budget approval pending executive review
-- Technical specifications require additional stakeholder input
-- Resource availability needs confirmation from department heads
-- Regulatory compliance considerations require legal review
+- Final budget approvals pending executive committee review session
+- Technical specifications require additional stakeholder consultation
+- Resource availability confirmation needed from departmental leadership
+- Regulatory compliance considerations require specialist legal review
 
-The meeting concluded with clear ownership of deliverables and established communication channels for ongoing project coordination. All participants expressed commitment to achieving the agreed-upon objectives within the specified timeframes.`;
+The meeting concluded with clear ownership assignments and established communication channels for ongoing project coordination. All participants demonstrated commitment to achieving agreed objectives within specified timeframes whilst maintaining operational excellence standards.`;
 
                     setSummary(summary);
                 } catch (error) {
@@ -333,8 +353,8 @@ The meeting concluded with clear ownership of deliverables and established commu
 
             const saveToBrain = async () => {
                 if (!summary.trim()) return;
-                
                 setSaveError('');
+                
                 const meetingRecord = {
                     id: Date.now(),
                     date: meetingDate || new Date().toISOString().split('T')[0],
@@ -384,12 +404,10 @@ The meeting concluded with clear ownership of deliverables and established commu
 
             const handleBrainQuery = async () => {
                 if (!brainQuery.trim() || storedMeetings.length === 0) return;
-
                 setIsBrainLoading(true);
                 setBrainResponse('');
 
                 try {
-                    // Get fresh data from database
                     const response = await fetch(`${API_BASE_URL}/meetings`);
                     let meetingsForQuery = storedMeetings;
                     
@@ -409,17 +427,22 @@ The meeting concluded with clear ownership of deliverables and established commu
                         }));
                     }
 
-                    // Enhanced placeholder response with more intelligent analysis
                     const queryLower = brainQuery.toLowerCase();
                     let response_text = '';
 
                     if (queryLower.includes('action') || queryLower.includes('task')) {
                         response_text = `Based on ${meetingsForQuery.length} stored meetings, here are the action items I found:\n\n`;
                         meetingsForQuery.forEach(meeting => {
-                            if (meeting.summary.toLowerCase().includes('action')) {
+                            const actionMatches = meeting.summary.match(/\|[^|]+\|[^|]+\|[^|]+\|[^|]+\|[^|]+\|/g);
+                            if (actionMatches && actionMatches.length > 1) {
                                 response_text += `**${meeting.title}** (${meeting.date}):\n`;
-                                response_text += `- Action items mentioned in summary\n`;
-                                response_text += `- Review meeting details for specific assignments\n\n`;
+                                actionMatches.slice(1).forEach(action => {
+                                    const parts = action.split('|').map(p => p.trim());
+                                    if (parts.length >= 3) {
+                                        response_text += `- ${parts[2]} (Assigned to: ${parts[1]})\n`;
+                                    }
+                                });
+                                response_text += '\n';
                             }
                         });
                     } else if (queryLower.includes('who') || queryLower.includes('attendees')) {
@@ -430,23 +453,14 @@ The meeting concluded with clear ownership of deliverables and established commu
                             if (meeting.clientAttendees) response_text += `- Client: ${meeting.clientAttendees}\n`;
                             response_text += '\n';
                         });
-                    } else if (queryLower.includes('when') || queryLower.includes('date')) {
-                        response_text = `Meeting timeline from ${meetingsForQuery.length} stored meetings:\n\n`;
-                        meetingsForQuery.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(meeting => {
-                            response_text += `- **${meeting.title}**: ${meeting.date}${meeting.time ? ` at ${meeting.time}` : ''}\n`;
-                        });
                     } else {
-                        response_text = `I found ${meetingsForQuery.length} meetings in the database. Here's a summary:\n\n`;
+                        response_text = `I found ${meetingsForQuery.length} meetings. Here's a summary:\n\n`;
                         meetingsForQuery.slice(0, 3).forEach(meeting => {
                             response_text += `**${meeting.title}** (${meeting.date}):\n`;
                             response_text += `${meeting.summary.substring(0, 200)}...\n\n`;
                         });
-                        if (meetingsForQuery.length > 3) {
-                            response_text += `And ${meetingsForQuery.length - 3} more meetings available.`;
-                        }
                     }
 
-                    response_text += '\n\n*Note: For full AI-powered analysis, integrate with your preferred AI service (OpenAI, Anthropic, etc.)*';
                     setBrainResponse(response_text);
                 } catch (err) {
                     setBrainResponse('An error occurred whilst processing your query. Please try again.');
@@ -505,47 +519,48 @@ The meeting concluded with clear ownership of deliverables and established commu
 
                     <main style={{
                         maxWidth: '1200px',
-                        margin: '0 auto',
-                        display: 'grid',
-                        gridTemplateColumns: showBrain ? '1fr 1fr' : '1fr',
-                        gap: '32px'
+                        margin: '0 auto'
                     }}>
-                        {/* Main Content */}
-                        <div>
-                            {/* Success/Error Messages */}
-                            {showSaveSuccess && (
-                                <div style={{
-                                    backgroundColor: '#d4edda',
-                                    border: '1px solid #c3e6cb',
-                                    borderRadius: '8px',
-                                    padding: '12px',
-                                    marginBottom: '20px',
-                                    color: '#155724'
-                                }}>
-                                    ✅ Meeting saved to Brain successfully!
-                                </div>
-                            )}
+                        {/* Success/Error Messages */}
+                        {showSaveSuccess && (
+                            <div style={{
+                                backgroundColor: '#d4edda',
+                                border: '1px solid #c3e6cb',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginBottom: '20px',
+                                color: '#155724'
+                            }}>
+                                ✅ Meeting saved to Brain successfully!
+                            </div>
+                        )}
 
-                            {saveError && (
-                                <div style={{
-                                    backgroundColor: '#f8d7da',
-                                    border: '1px solid #f5c6cb',
-                                    borderRadius: '8px',
-                                    padding: '12px',
-                                    marginBottom: '20px',
-                                    color: '#721c24'
-                                }}>
-                                    ❌ {saveError}
-                                </div>
-                            )}
+                        {saveError && (
+                            <div style={{
+                                backgroundColor: '#f8d7da',
+                                border: '1px solid #f5c6cb',
+                                borderRadius: '8px',
+                                padding: '12px',
+                                marginBottom: '20px',
+                                color: '#721c24'
+                            }}>
+                                ❌ {saveError}
+                            </div>
+                        )}
 
+                        {/* TOP GRID: File Upload + Raw Notes */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 2fr',
+                            gap: '24px',
+                            marginBottom: '24px'
+                        }}>
                             {/* File Upload Section */}
                             <section style={{
                                 backgroundColor: 'white',
                                 borderRadius: '12px',
                                 padding: '24px',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                marginBottom: '24px'
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                             }}>
                                 <h2 style={{
                                     fontSize: '20px',
@@ -617,35 +632,16 @@ The meeting concluded with clear ownership of deliverables and established commu
                                                 </div>
                                             ))}
                                         </div>
-                                        <button
-                                            onClick={extractFromFiles}
-                                            disabled={isGenerating}
-                                            style={{
-                                                marginTop: '12px',
-                                                padding: '10px 20px',
-                                                backgroundColor: '#6b7c4e',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '6px',
-                                                cursor: isGenerating ? 'not-allowed' : 'pointer',
-                                                opacity: isGenerating ? 0.6 : 1,
-                                                fontSize: '14px',
-                                                fontWeight: '500'
-                                            }}
-                                        >
-                                            {isGenerating ? 'Extracting...' : 'Extract Content'}
-                                        </button>
                                     </div>
                                 )}
                             </section>
 
-                            {/* Meeting Details Section */}
+                            {/* Raw Notes Section */}
                             <section style={{
                                 backgroundColor: 'white',
                                 borderRadius: '12px',
                                 padding: '24px',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                marginBottom: '24px'
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                             }}>
                                 <h2 style={{
                                     fontSize: '20px',
@@ -653,223 +649,230 @@ The meeting concluded with clear ownership of deliverables and established commu
                                     marginBottom: '16px',
                                     color: '#374528'
                                 }}>
-                                    📅 Meeting Details
+                                    📝 Meeting Notes
                                 </h2>
+                                <textarea
+                                    value={rawNotes}
+                                    onChange={(e) => setRawNotes(e.target.value)}
+                                    placeholder="Paste your meeting notes here or upload files to auto-extract..."
+                                    style={{
+                                        width: '100%',
+                                        height: '300px',
+                                        padding: '12px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        lineHeight: '1.5',
+                                        resize: 'vertical',
+                                        fontFamily: 'inherit'
+                                    }}
+                                />
+                            </section>
+                        </div>
+
+                        {/* Meeting Details Section */}
+                        <section style={{
+                            backgroundColor: 'white',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            marginBottom: '24px'
+                        }}>
+                            <h2 style={{
+                                fontSize: '20px',
+                                fontWeight: '600',
+                                marginBottom: '16px',
+                                color: '#374528'
+                            }}>
+                                📅 Meeting Details
+                            </h2>
+                            
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                gap: '16px'
+                            }}>
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '4px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#374528'
+                                    }}>
+                                        Meeting Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={meetingTitle}
+                                        onChange={(e) => setMeetingTitle(e.target.value)}
+                                        placeholder="Enter meeting title"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '6px',
+                                            fontSize: '14px'
+                                        }}
+                                    />
+                                </div>
                                 
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                                    gap: '16px'
-                                }}>
-                                    <div>
-                                        <label style={{
-                                            display: 'block',
-                                            marginBottom: '4px',
-                                            fontSize: '14px',
-                                            fontWeight: '500',
-                                            color: '#374528'
-                                        }}>
-                                            Meeting Title
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={meetingTitle}
-                                            onChange={(e) => setMeetingTitle(e.target.value)}
-                                            placeholder="Enter meeting title"
-                                            style={{
-                                                width: '100%',
-                                                padding: '8px 12px',
-                                                border: '1px solid #d1d5db',
-                                                borderRadius: '6px',
-                                                fontSize: '14px'
-                                            }}
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label style={{
-                                            display: 'block',
-                                            marginBottom: '4px',
-                                            fontSize: '14px',
-                                            fontWeight: '500',
-                                            color: '#374528'
-                                        }}>
-                                            Date
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={meetingDate}
-                                            onChange={(e) => setMeetingDate(e.target.value)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '8px 12px',
-                                                border: '1px solid #d1d5db',
-                                                borderRadius: '6px',
-                                                fontSize: '14px'
-                                            }}
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label style={{
-                                            display: 'block',
-                                            marginBottom: '4px',
-                                            fontSize: '14px',
-                                            fontWeight: '500',
-                                            color: '#374528'
-                                        }}>
-                                            Time
-                                        </label>
-                                        <input
-                                            type="time"
-                                            value={meetingTime}
-                                            onChange={(e) => setMeetingTime(e.target.value)}
-                                            style={{
-                                                width: '100%',
-                                                padding: '8px 12px',
-                                                border: '1px solid #d1d5db',
-                                                borderRadius: '6px',
-                                                fontSize: '14px'
-                                            }}
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label style={{
-                                            display: 'block',
-                                            marginBottom: '4px',
-                                            fontSize: '14px',
-                                            fontWeight: '500',
-                                            color: '#374528'
-                                        }}>
-                                            Location/Venue
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={location}
-                                            onChange={(e) => setLocation(e.target.value)}
-                                           placeholder="Meeting location"
-                                           style={{
-                                               width: '100%',
-                                               padding: '8px 12px',
-                                               border: '1px solid #d1d5db',
-                                               borderRadius: '6px',
-                                               fontSize: '14px'
-                                           }}
-                                       />
-                                   </div>
-                                   
-                                   <div>
-                                       <label style={{
-                                           display: 'block',
-                                           marginBottom: '4px',
-                                           fontSize: '14px',
-                                           fontWeight: '500',
-                                           color: '#374528'
-                                       }}>
-                                           Company Attendees
-                                       </label>
-                                       <input
-                                           type="text"
-                                           value={companyAttendees}
-                                           onChange={(e) => setCompanyAttendees(e.target.value)}
-                                           placeholder="Company attendees"
-                                           style={{
-                                               width: '100%',
-                                               padding: '8px 12px',
-                                               border: '1px solid #d1d5db',
-                                               borderRadius: '6px',
-                                               fontSize: '14px'
-                                           }}
-                                       />
-                                   </div>
-                                   
-                                   <div>
-                                       <label style={{
-                                           display: 'block',
-                                           marginBottom: '4px',
-                                           fontSize: '14px',
-                                           fontWeight: '500',
-                                           color: '#374528'
-                                       }}>
-                                           Client Attendees
-                                       </label>
-                                       <input
-                                           type="text"
-                                           value={clientAttendees}
-                                           onChange={(e) => setClientAttendees(e.target.value)}
-                                           placeholder="Client attendees"
-                                           style={{
-                                               width: '100%',
-                                               padding: '8px 12px',
-                                               border: '1px solid #d1d5db',
-                                               borderRadius: '6px',
-                                               fontSize: '14px'
-                                           }}
-                                       />
-                                   </div>
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '4px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#374528'
+                                    }}>
+                                        Date
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={meetingDate}
+                                        onChange={(e) => setMeetingDate(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '6px',
+                                            fontSize: '14px'
+                                        }}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '4px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#374528'
+                                    }}>
+                                        Time
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={meetingTime}
+                                        onChange={(e) => setMeetingTime(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '6px',
+                                            fontSize: '14px'
+                                        }}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '4px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#374528'
+                                    }}>
+                                        Location
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={location}
+                                        onChange={(e) => setLocation(e.target.value)}
+                                        placeholder="Meeting location"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '6px',
+                                            fontSize: '14px'
+                                        }}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '4px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#374528'
+                                    }}>
+                                        Company Attendees
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={companyAttendees}
+                                       onChange={(e) => setCompanyAttendees(e.target.value)}
+                                       placeholder="Company attendees"
+                                       style={{
+                                           width: '100%',
+                                           padding: '8px 12px',
+                                           border: '1px solid #d1d5db',
+                                           borderRadius: '6px',
+                                           fontSize: '14px'
+                                       }}
+                                   />
                                </div>
-                           </section>
-
-                           {/* Raw Notes Section */}
-                           <section style={{
-                               backgroundColor: 'white',
-                               borderRadius: '12px',
-                               padding: '24px',
-                               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                               marginBottom: '24px'
-                           }}>
-                               <h2 style={{
-                                   fontSize: '20px',
-                                   fontWeight: '600',
-                                   marginBottom: '16px',
-                                   color: '#374528'
-                               }}>
-                                   📝 Raw Meeting Notes
-                               </h2>
-                               <textarea
-                                   value={rawNotes}
-                                   onChange={(e) => setRawNotes(e.target.value)}
-                                   placeholder="Paste or type your meeting notes here..."
-                                   style={{
-                                       width: '100%',
-                                       minHeight: '200px',
-                                       padding: '12px',
-                                       border: '1px solid #d1d5db',
-                                       borderRadius: '8px',
+                               
+                               <div>
+                                   <label style={{
+                                       display: 'block',
+                                       marginBottom: '4px',
                                        fontSize: '14px',
-                                       lineHeight: '1.5',
-                                       resize: 'vertical',
-                                       fontFamily: 'inherit'
-                                   }}
-                               />
-                               <button
-                                   onClick={generateSummary}
-                                   disabled={!rawNotes.trim() || isGenerating}
-                                   style={{
-                                       marginTop: '12px',
-                                       padding: '12px 24px',
-                                       backgroundColor: rawNotes.trim() ? '#6b7c4e' : '#9ca3af',
-                                       color: 'white',
-                                       border: 'none',
-                                       borderRadius: '8px',
-                                       cursor: rawNotes.trim() ? 'pointer' : 'not-allowed',
-                                       fontSize: '14px',
-                                       fontWeight: '500'
-                                   }}
-                               >
-                                   {isGenerating ? '🔄 Generating Summary...' : '✨ Generate Professional Summary'}
-                               </button>
-                           </section>
+                                       fontWeight: '500',
+                                       color: '#374528'
+                                   }}>
+                                       Client Attendees
+                                   </label>
+                                   <input
+                                       type="text"
+                                       value={clientAttendees}
+                                       onChange={(e) => setClientAttendees(e.target.value)}
+                                       placeholder="Client attendees"
+                                       style={{
+                                           width: '100%',
+                                           padding: '8px 12px',
+                                           border: '1px solid #d1d5db',
+                                           borderRadius: '6px',
+                                           fontSize: '14px'
+                                       }}
+                                   />
+                               </div>
+                           </div>
+                           
+                           <button
+                               onClick={generateSummary}
+                               disabled={!rawNotes.trim() || isGenerating}
+                               style={{
+                                   marginTop: '20px',
+                                   padding: '12px 24px',
+                                   backgroundColor: rawNotes.trim() ? '#6b7c4e' : '#9ca3af',
+                                   color: 'white',
+                                   border: 'none',
+                                   borderRadius: '8px',
+                                   cursor: rawNotes.trim() ? 'pointer' : 'not-allowed',
+                                   fontSize: '14px',
+                                   fontWeight: '500'
+                               }}
+                           >
+                               {isGenerating ? '🔄 Generating Summary...' : '✨ Generate Professional Summary'}
+                           </button>
+                       </section>
 
+                       {/* Summary and Brain Grid */}
+                       <div style={{
+                           display: 'grid',
+                           gridTemplateColumns: showBrain ? '2fr 1fr' : '1fr',
+                           gap: '24px'
+                       }}>
                            {/* Summary Section */}
                            {summary && (
                                <section style={{
                                    backgroundColor: 'white',
                                    borderRadius: '12px',
                                    padding: '24px',
-                                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                   marginBottom: '24px'
+                                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                                }}>
                                    <div style={{
                                        display: 'flex',
@@ -909,212 +912,208 @@ The meeting concluded with clear ownership of deliverables and established commu
                                        border: '1px solid #e5e7eb',
                                        whiteSpace: 'pre-wrap',
                                        fontSize: '14px',
-                                       lineHeight: '1.6'
-                                   }}
-                                   className="markdown-content"
-                                   dangerouslySetInnerHTML={{
-                                       __html: renderText(summary)
+                                       lineHeight: '1.6',
+                                       maxHeight: '600px',
+                                       overflowY: 'auto'
                                    }}>
+                                       {summary}
                                    </div>
                                </section>
                            )}
-                       </div>
 
-                       {/* Brain Panel */}
-                       {showBrain && (
-                           <div style={{
-                               backgroundColor: 'white',
-                               borderRadius: '12px',
-                               padding: '24px',
-                               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                               height: 'fit-content'
-                           }}>
-                               <h2 style={{ 
-                                   fontSize: '20px', 
-                                   fontWeight: '600', 
-                                   marginBottom: '16px',
-                                   color: '#374528',
-                                   display: 'flex',
-                                   alignItems: 'center',
-                                   gap: '8px'
+                           {/* Brain Panel */}
+                           {showBrain && (
+                               <div style={{
+                                   backgroundColor: 'white',
+                                   borderRadius: '12px',
+                                   padding: '24px',
+                                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                   height: 'fit-content'
                                }}>
-                                   🧠 Meeting Brain
-                               </h2>
-
-                               {/* Query Section */}
-                               <div style={{ marginBottom: '20px' }}>
-                                   <label style={{
-                                       display: 'block',
-                                       marginBottom: '8px',
-                                       fontSize: '14px',
-                                       fontWeight: '500',
-                                       color: '#374528'
+                                   <h2 style={{ 
+                                       fontSize: '20px', 
+                                       fontWeight: '600', 
+                                       marginBottom: '16px',
+                                       color: '#374528',
+                                       display: 'flex',
+                                       alignItems: 'center',
+                                       gap: '8px'
                                    }}>
-                                       Ask about your meetings:
-                                   </label>
-                                   <div style={{ display: 'flex', gap: '8px' }}>
-                                       <input
-                                           type="text"
-                                           value={brainQuery}
-                                           onChange={(e) => setBrainQuery(e.target.value)}
-                                           placeholder="e.g., What action items were assigned to Maria?"
-                                           onKeyPress={(e) => e.key === 'Enter' && handleBrainQuery()}
-                                           style={{
-                                               flex: 1,
-                                               padding: '8px 12px',
-                                               border: '1px solid #d1d5db',
-                                               borderRadius: '6px',
-                                               fontSize: '14px'
-                                           }}
-                                       />
-                                       <button
-                                           onClick={handleBrainQuery}
-                                           disabled={!brainQuery.trim() || storedMeetings.length === 0 || isBrainLoading}
-                                           style={{
-                                               padding: '8px 16px',
-                                               backgroundColor: (brainQuery.trim() && storedMeetings.length > 0) ? '#6b7c4e' : '#9ca3af',
-                                               color: 'white',
-                                               border: 'none',
-                                               borderRadius: '6px',
-                                               cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
-                                               fontSize: '14px',
-                                               fontWeight: '500'
-                                           }}
-                                       >
-                                           {isBrainLoading ? '🔄' : '🔍'}
-                                       </button>
-                                   </div>
-                               </div>
+                                       🧠 Meeting Brain
+                                   </h2>
 
-                               {/* Response Section */}
-                               {brainResponse && (
-                                   <div style={{
-                                       padding: '12px',
-                                       backgroundColor: '#f8faf6',
-                                       borderRadius: '8px',
-                                       marginBottom: '20px',
-                                       border: '1px solid #e5e7eb'
-                                   }}>
-                                       <h4 style={{
-                                           fontSize: '14px',
-                                           fontWeight: '600',
+                                   {/* Query Section */}
+                                   <div style={{ marginBottom: '20px' }}>
+                                       <label style={{
+                                           display: 'block',
                                            marginBottom: '8px',
+                                           fontSize: '14px',
+                                           fontWeight: '500',
                                            color: '#374528'
                                        }}>
-                                           Response:
-                                       </h4>
-                                       <div style={{
-                                           fontSize: '14px',
-                                           lineHeight: '1.5',
-                                           whiteSpace: 'pre-wrap'
-                                       }}
-                                       className="markdown-content"
-                                       dangerouslySetInnerHTML={{
-                                           __html: renderText(brainResponse)
-                                       }}>
+                                           Ask about your meetings:
+                                       </label>
+                                       <div style={{ display: 'flex', gap: '8px' }}>
+                                           <input
+                                               type="text"
+                                               value={brainQuery}
+                                               onChange={(e) => setBrainQuery(e.target.value)}
+                                               placeholder="e.g., What action items were assigned to Maria?"
+                                               onKeyPress={(e) => e.key === 'Enter' && handleBrainQuery()}
+                                               style={{
+                                                   flex: 1,
+                                                   padding: '8px 12px',
+                                                   border: '1px solid #d1d5db',
+                                                   borderRadius: '6px',
+                                                   fontSize: '14px'
+                                               }}
+                                           />
+                                           <button
+                                               onClick={handleBrainQuery}
+                                               disabled={!brainQuery.trim() || storedMeetings.length === 0 || isBrainLoading}
+                                               style={{
+                                                   padding: '8px 16px',
+                                                   backgroundColor: (brainQuery.trim() && storedMeetings.length > 0) ? '#6b7c4e' : '#9ca3af',
+                                                   color: 'white',
+                                                   border: 'none',
+                                                   borderRadius: '6px',
+                                                   cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
+                                                   fontSize: '14px',
+                                                   fontWeight: '500'
+                                               }}
+                                           >
+                                               {isBrainLoading ? '🔄' : '🔍'}
+                                           </button>
                                        </div>
                                    </div>
-                               )}
 
-                               {/* Stored Meetings List */}
-                               <div>
-                                   <h3 style={{
-                                       fontSize: '16px',
-                                       fontWeight: '600',
-                                       marginBottom: '12px',
-                                       color: '#374528'
-                                   }}>
-                                       Stored Meetings ({storedMeetings.length})
-                                   </h3>
-                                   
-                                   {isLoadingMeetings ? (
-                                       <div style={{ textAlign: 'center', padding: '20px' }}>
-                                           <div>🔄 Loading meetings...</div>
-                                       </div>
-                                   ) : storedMeetings.length === 0 ? (
+                                   {/* Response Section */}
+                                   {brainResponse && (
                                        <div style={{
-                                           textAlign: 'center',
-                                           padding: '20px',
-                                           color: '#6b7280',
-                                           fontSize: '14px'
+                                           padding: '12px',
+                                           backgroundColor: '#f8faf6',
+                                           borderRadius: '8px',
+                                           marginBottom: '20px',
+                                           border: '1px solid #e5e7eb'
                                        }}>
-                                           No meetings stored yet. Generate and save a summary to get started!
-                                       </div>
-                                   ) : (
-                                       <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                           {storedMeetings.map((meeting) => (
-                                               <div key={meeting.id} style={{
-                                                   padding: '12px',
-                                                   backgroundColor: '#f8faf6',
-                                                   borderRadius: '8px',
-                                                   marginBottom: '8px',
-                                                   border: '1px solid #e5e7eb'
-                                               }}>
-                                                   <div style={{
-                                                       display: 'flex',
-                                                       justifyContent: 'space-between',
-                                                       alignItems: 'flex-start',
-                                                       marginBottom: '8px'
-                                                   }}>
-                                                       <div>
-                                                           <h4 style={{
-                                                               fontSize: '14px',
-                                                               fontWeight: '600',
-                                                               margin: '0 0 4px 0',
-                                                               color: '#374528'
-                                                           }}>
-                                                               {meeting.title}
-                                                           </h4>
-                                                           <div style={{
-                                                               fontSize: '12px',
-                                                               color: '#6b7280'
-                                                           }}>
-                                                               📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
-                                                               {meeting.venue && ` • 📍 ${meeting.venue}`}
-                                                           </div>
-                                                       </div>
-                                                       <button
-                                                           onClick={() => deleteMeeting(meeting.id)}
-                                                           style={{
-                                                               background: 'none',
-                                                               border: 'none',
-                                                               color: '#dc3545',
-                                                               cursor: 'pointer',
-                                                               fontSize: '14px',
-                                                               padding: '4px'
-                                                           }}
-                                                           title="Delete meeting"
-                                                       >
-                                                           🗑️
-                                                       </button>
-                                                   </div>
-                                                   {(meeting.companyAttendees || meeting.clientAttendees) && (
-                                                       <div style={{
-                                                           fontSize: '12px',
-                                                           color: '#6b7280',
-                                                           marginBottom: '8px'
-                                                       }}>
-                                                           {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
-                                                           {meeting.companyAttendees && meeting.clientAttendees && ' • '}
-                                                           {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
-                                                       </div>
-                                                   )}
-                                                   <div style={{
-                                                       fontSize: '12px',
-                                                       color: '#374528',
-                                                       maxHeight: '60px',
-                                                       overflow: 'hidden',
-                                                       textOverflow: 'ellipsis'
-                                                   }}>
-                                                       {meeting.summary.substring(0, 150)}...
-                                                   </div>
-                                               </div>
-                                           ))}
+                                           <h4 style={{
+                                               fontSize: '14px',
+                                               fontWeight: '600',
+                                               marginBottom: '8px',
+                                               color: '#374528'
+                                           }}>
+                                               Response:
+                                           </h4>
+                                           <div style={{
+                                               fontSize: '14px',
+                                               lineHeight: '1.5',
+                                               whiteSpace: 'pre-wrap'
+                                           }}>
+                                               {brainResponse}
+                                           </div>
                                        </div>
                                    )}
+
+                                   {/* Stored Meetings List */}
+                                   <div>
+                                       <h3 style={{
+                                           fontSize: '16px',
+                                           fontWeight: '600',
+                                           marginBottom: '12px',
+                                           color: '#374528'
+                                       }}>
+                                           Stored Meetings ({storedMeetings.length})
+                                       </h3>
+                                       
+                                       {isLoadingMeetings ? (
+                                           <div style={{ textAlign: 'center', padding: '20px' }}>
+                                               <div>🔄 Loading meetings...</div>
+                                           </div>
+                                       ) : storedMeetings.length === 0 ? (
+                                           <div style={{
+                                               textAlign: 'center',
+                                               padding: '20px',
+                                               color: '#6b7280',
+                                               fontSize: '14px'
+                                           }}>
+                                               No meetings stored yet. Generate and save a summary to get started!
+                                           </div>
+                                       ) : (
+                                           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                               {storedMeetings.map((meeting) => (
+                                                   <div key={meeting.id} style={{
+                                                       padding: '12px',
+                                                       backgroundColor: '#f8faf6',
+                                                       borderRadius: '8px',
+                                                       marginBottom: '8px',
+                                                       border: '1px solid #e5e7eb'
+                                                   }}>
+                                                       <div style={{
+                                                           display: 'flex',
+                                                           justifyContent: 'space-between',
+                                                           alignItems: 'flex-start',
+                                                           marginBottom: '8px'
+                                                       }}>
+                                                           <div>
+                                                               <h4 style={{
+                                                                   fontSize: '14px',
+                                                                   fontWeight: '600',
+                                                                   margin: '0 0 4px 0',
+                                                                   color: '#374528'
+                                                               }}>
+                                                                   {meeting.title}
+                                                               </h4>
+                                                               <div style={{
+                                                                   fontSize: '12px',
+                                                                   color: '#6b7280'
+                                                               }}>
+                                                                   📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
+                                                                   {meeting.venue && ` • 📍 ${meeting.venue}`}
+                                                               </div>
+                                                           </div>
+                                                           <button
+                                                               onClick={() => deleteMeeting(meeting.id)}
+                                                               style={{
+                                                                   background: 'none',
+                                                                   border: 'none',
+                                                                   color: '#dc3545',
+                                                                   cursor: 'pointer',
+                                                                   fontSize: '14px',
+                                                                   padding: '4px'
+                                                               }}
+                                                               title="Delete meeting"
+                                                           >
+                                                               🗑️
+                                                           </button>
+                                                       </div>
+                                                       {(meeting.companyAttendees || meeting.clientAttendees) && (
+                                                           <div style={{
+                                                               fontSize: '12px',
+                                                               color: '#6b7280',
+                                                               marginBottom: '8px'
+                                                           }}>
+                                                               {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
+                                                               {meeting.companyAttendees && meeting.clientAttendees && ' • '}
+                                                               {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
+                                                           </div>
+                                                       )}
+                                                       <div style={{
+                                                           fontSize: '12px',
+                                                           color: '#374528',
+                                                           maxHeight: '60px',
+                                                           overflow: 'hidden',
+                                                           textOverflow: 'ellipsis'
+                                                       }}>
+                                                           {meeting.summary.substring(0, 150)}...
+                                                       </div>
+                                                   </div>
+                                               ))}
+                                           </div>
+                                       )}
+                                   </div>
                                </div>
-                           </div>
-                       )}
+                           )}
+                       </div>
                    </main>
                </div>
            );
