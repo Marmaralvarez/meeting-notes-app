@@ -55,6 +55,82 @@
             margin-bottom: 16px;
             font-size: 14px;
         }
+
+        /* Enhanced markdown formatting styles */
+        .markdown-content h1 { 
+            font-size: 1.875rem; 
+            font-weight: 700; 
+            margin: 1.5rem 0 1rem 0; 
+            color: #1f2937; 
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+        }
+        .markdown-content h2 { 
+            font-size: 1.5rem; 
+            font-weight: 600; 
+            margin: 1.25rem 0 0.75rem 0; 
+            color: #374151; 
+        }
+        .markdown-content h3 { 
+            font-size: 1.25rem; 
+            font-weight: 600; 
+            margin: 1rem 0 0.5rem 0; 
+            color: #4b5563; 
+        }
+        .markdown-content h4 { 
+            font-size: 1.125rem; 
+            font-weight: 600; 
+            margin: 0.75rem 0 0.5rem 0; 
+            color: #6b7280; 
+        }
+        .markdown-content p { 
+            margin: 0.5rem 0; 
+        }
+        .markdown-content ul, .markdown-content ol { 
+            margin: 0.5rem 0; 
+            padding-left: 1.5rem; 
+        }
+        .markdown-content li { 
+            margin: 0.25rem 0; 
+        }
+        .markdown-content strong { 
+            font-weight: 600; 
+            color: #1f2937; 
+        }
+        .markdown-content table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 1rem 0; 
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .markdown-content th, .markdown-content td { 
+            border: 1px solid #d1d5db; 
+            padding: 0.75rem 0.5rem; 
+            text-align: left; 
+        }
+        .markdown-content th { 
+            background-color: #f3f4f6; 
+            font-weight: 600; 
+        }
+        .markdown-content tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .markdown-content blockquote { 
+            border-left: 4px solid #d1d5db; 
+            padding-left: 1rem; 
+            margin: 1rem 0; 
+            font-style: italic; 
+            color: #6b7280; 
+        }
+        .markdown-content code { 
+            background-color: #f3f4f6; 
+            padding: 0.125rem 0.25rem; 
+            border-radius: 0.25rem; 
+            font-family: 'Courier New', monospace; 
+            font-size: 0.875rem; 
+        }
     </style>
 </head>
 <body>
@@ -62,6 +138,50 @@
     
     <script type="text/babel">
         const { useState, useEffect } = React;
+
+        // Enhanced markdown renderer
+        const renderMarkdown = (text) => {
+            if (!text) return '';
+            
+            return text
+                // Headers
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^#### (.*$)/gim, '<h4>$1</h4>')
+                
+                // Bold and italic
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                
+                // Tables - improved table parsing
+                .replace(/^\|(.+)\|$/gim, (match, content) => {
+                    const cells = content.split('|').map(cell => cell.trim());
+                    return `<tr>${cells.map(cell => `<td>${cell}</td>`).join('')}</tr>`;
+                })
+                
+                // Wrap table rows in table tags
+                .replace(/(<tr>.*?<\/tr>(?:\s*<tr>.*?<\/tr>)*)/gs, (match) => {
+                    const rows = match.match(/<tr>.*?<\/tr>/g);
+                    if (!rows || rows.length === 0) return match;
+                    
+                    // First row as header
+                    const headerRow = rows[0].replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>');
+                    const dataRows = rows.slice(1).join('');
+                    
+                    return `<table>${headerRow}${dataRows}</table>`;
+                })
+                
+                // Lists
+                .replace(/^[-*] (.*$)/gim, '<li>$1</li>')
+                .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
+                
+                // Wrap consecutive list items
+                .replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>')
+                
+                // Line breaks
+                .replace(/\n/g, '<br>');
+        };
 
         function MeetingNotesApp() {
             // State management
@@ -91,7 +211,6 @@
             // API endpoints
             const API_BASE_URL = 'https://meeting-notes-api-watertrace.vercel.app/api';
 
-            // Load meetings from database on component mount
             useEffect(() => {
                 loadMeetingsFromDatabase();
             }, []);
@@ -165,9 +284,9 @@
                 }
             };
 
-            // AI-powered functions
             const callAI = async (type, content, prompt = '') => {
                 try {
+                    console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
                     const response = await fetch(`${API_BASE_URL}/ai`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -184,6 +303,7 @@
                     }
 
                     const data = await response.json();
+                    console.log(`AI response for ${type}:`, data.result);
                     return data.result;
                 } catch (error) {
                     console.error('AI API Error:', error);
@@ -195,7 +315,6 @@
                 const uploadedFiles = Array.from(event.target.files);
                 setFiles(prev => [...prev, ...uploadedFiles]);
                 
-                // Auto-extract immediately when files are uploaded
                 setTimeout(() => {
                     extractFromFilesWithAI(uploadedFiles);
                 }, 100);
@@ -214,47 +333,41 @@
                 try {
                     let extractedContent = '';
                     
-                    // Read all files
+                    // Read all files - AI will analyze content, not filename
                     for (const file of filesToProcess) {
                         const text = await readFile(file);
-                        extractedContent += `\n\n=== FILE: ${file.name} ===\n${text}`;
+                        extractedContent += text + '\n\n';
                     }
                     
                     setRawNotes(extractedContent);
                     
-                    // Use AI to extract meeting details
+                    // Use AI to extract meeting details from CONTENT
                     try {
                         const extractedData = await callAI('extract', extractedContent);
                         
                         console.log('AI Extraction Result:', extractedData);
                         
-                        // Update form fields with AI-extracted data
-                        if (extractedData.title) {
-                            setMeetingTitle(extractedData.title);
-                        }
-                        if (extractedData.date) {
-                            setMeetingDate(extractedData.date);
-                        }
-                        if (extractedData.time) {
-                            setMeetingTime(extractedData.time);
-                        }
-                        if (extractedData.location) {
-                            setLocation(extractedData.location);
-                        }
-                        if (extractedData.attendees) {
-                            setCompanyAttendees(extractedData.attendees);
+                        if (extractedData && typeof extractedData === 'object') {
+                            if (extractedData.title && extractedData.title !== 'null') {
+                                setMeetingTitle(extractedData.title);
+                            }
+                            if (extractedData.date && extractedData.date !== 'null') {
+                                setMeetingDate(extractedData.date);
+                            }
+                            if (extractedData.time && extractedData.time !== 'null') {
+                                setMeetingTime(extractedData.time);
+                            }
+                            if (extractedData.location && extractedData.location !== 'null') {
+                                setLocation(extractedData.location);
+                            }
+                            if (extractedData.attendees && extractedData.attendees !== 'null') {
+                                setCompanyAttendees(extractedData.attendees);
+                            }
                         }
                         
                     } catch (aiError) {
                         console.error('AI extraction failed:', aiError);
                         setAiError(`AI extraction failed: ${aiError.message}. You can still fill in the details manually.`);
-                        
-                        // Fallback to basic filename extraction
-                        if (filesToProcess.length > 0) {
-                            const firstFile = filesToProcess[0];
-                            const basicTitle = firstFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-                            setMeetingTitle(basicTitle);
-                        }
                     }
                     
                 } catch (error) {
@@ -281,7 +394,6 @@
                 setAiError('');
                 
                 try {
-                    // Create context for AI
                     const meetingContext = {
                         title: meetingTitle || 'Meeting',
                         date: meetingDate,
@@ -371,7 +483,6 @@ ${meetingContext.content}`;
                 setBrainResponse('');
 
                 try {
-                    // Get fresh data from database
                     const response = await fetch(`${API_BASE_URL}/meetings`);
                     let meetingsForQuery = storedMeetings;
                     
@@ -391,7 +502,6 @@ ${meetingContext.content}`;
                         }));
                     }
 
-                    // Prepare meeting data for AI
                     const meetingData = meetingsForQuery.map(meeting => 
                         `Meeting: ${meeting.title} (${meeting.date})
 Location: ${meeting.venue || 'Not specified'}
@@ -423,7 +533,7 @@ User Question: ${brainQuery}`;
                     backgroundColor: '#f8faf6',
                     minHeight: '100vh',
                     padding: '20px'
-                }}>
+                                    }}>
                     <header style={{
                         maxWidth: '1200px',
                         margin: '0 auto',
@@ -523,7 +633,7 @@ User Question: ${brainQuery}`;
                                     📁 Upload Meeting Files
                                     {isExtracting && (
                                         <span className="ai-indicator processing">
-                                            🤖 AI Extracting...
+                                            🤖 AI Analyzing Content...
                                         </span>
                                     )}
                                 </h2>
@@ -547,7 +657,7 @@ User Question: ${brainQuery}`;
                                         fontSize: '14px',
                                         fontWeight: '500'
                                     }}>
-                                        {isExtracting ? 'Processing...' : 'Choose Files'}
+                                        {isExtracting ? 'AI Processing...' : 'Choose Files'}
                                     </label>
                                 </div>
 
@@ -612,7 +722,7 @@ User Question: ${brainQuery}`;
                                 <textarea
                                     value={rawNotes}
                                     onChange={(e) => setRawNotes(e.target.value)}
-                                    placeholder="Paste your meeting notes here or upload files for AI extraction..."
+                                    placeholder="Paste your meeting notes here or upload files for AI content analysis..."
                                     style={{
                                         width: '100%',
                                         height: '300px',
@@ -645,7 +755,7 @@ User Question: ${brainQuery}`;
                                 📅 Meeting Details
                                 {(meetingTitle || meetingDate || meetingTime || location || companyAttendees) && (
                                     <span className="ai-indicator">
-                                        🤖 AI Extracted
+                                        🤖 AI Extracted from Content
                                     </span>
                                 )}
                             </h2>
@@ -669,7 +779,7 @@ User Question: ${brainQuery}`;
                                         type="text"
                                         value={meetingTitle}
                                         onChange={(e) => setMeetingTitle(e.target.value)}
-                                        placeholder="Enter meeting title"
+                                        placeholder="AI will analyze content to extract title"
                                         style={{
                                             width: '100%',
                                             padding: '8px 12px',
@@ -881,19 +991,22 @@ User Question: ${brainQuery}`;
                                             🧠 Save to Brain
                                         </button>
                                     </div>
-                                    <div style={{
-                                        padding: '16px',
-                                        backgroundColor: '#f8faf6',
-                                        borderRadius: '8px',
-                                        border: '1px solid #e5e7eb',
-                                        whiteSpace: 'pre-wrap',
-                                        fontSize: '14px',
-                                        lineHeight: '1.6',
-                                        maxHeight: '600px',
-                                        overflowY: 'auto'
-                                    }}>
-                                        {summary}
-                                    </div>
+                                    <div 
+                                        style={{
+                                            padding: '16px',
+                                            backgroundColor: '#f8faf6',
+                                            borderRadius: '8px',
+                                            border: '1px solid #e5e7eb',
+                                            fontSize: '14px',
+                                            lineHeight: '1.6',
+                                            maxHeight: '600px',
+                                            overflowY: 'auto'
+                                        }}
+                                        className="markdown-content"
+                                        dangerouslySetInnerHTML={{
+                                            __html: renderMarkdown(summary)
+                                        }}
+                                    />
                                 </section>
                             )}
 
@@ -937,7 +1050,7 @@ User Question: ${brainQuery}`;
                                                 type="text"
                                                 value={brainQuery}
                                                 onChange={(e) => setBrainQuery(e.target.value)}
-                                                placeholder="e.g., What training was discussed? Who attended the June meeting?"
+                                                placeholder="e.g., What was discussed about the RFP? Who attended meetings?"
                                                 onKeyPress={(e) => e.key === 'Enter' && handleBrainQueryWithAI()}
                                                 style={{
                                                     flex: 1,
@@ -1019,13 +1132,16 @@ User Question: ${brainQuery}`;
                                             }}>
                                                 🤖 AI Response:
                                             </h4>
-                                            <div style={{
-                                                fontSize: '14px',
-                                                lineHeight: '1.5',
-                                                whiteSpace: 'pre-wrap'
-                                            }}>
-                                                {brainResponse}
-                                            </div>
+                                            <div 
+                                                style={{
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.5'
+                                                }}
+                                                className="markdown-content"
+                                                dangerouslySetInnerHTML={{
+                                                    __html: renderMarkdown(brainResponse)
+                                                }}
+                                            />
                                         </div>
                                     )}
 
