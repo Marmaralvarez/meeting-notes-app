@@ -32,6 +32,29 @@
             position: absolute;
             left: -9999px;
         }
+
+        .ai-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            color: #6b7c4e;
+            margin-left: 8px;
+        }
+
+        .ai-indicator.processing {
+            color: #f59e0b;
+        }
+
+        .error-message {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -46,12 +69,14 @@
             const [rawNotes, setRawNotes] = useState('');
             const [summary, setSummary] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
+            const [isExtracting, setIsExtracting] = useState(false);
             const [meetingDate, setMeetingDate] = useState('');
             const [meetingTime, setMeetingTime] = useState('');
             const [location, setLocation] = useState('');
             const [meetingTitle, setMeetingTitle] = useState('');
             const [companyAttendees, setCompanyAttendees] = useState('');
             const [clientAttendees, setClientAttendees] = useState('');
+            const [aiError, setAiError] = useState('');
 
             // Brain functionality
             const [storedMeetings, setStoredMeetings] = useState([]);
@@ -63,7 +88,7 @@
             const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
             const [saveError, setSaveError] = useState('');
 
-            // Your Vercel API endpoint
+            // API endpoints
             const API_BASE_URL = 'https://meeting-notes-api-watertrace.vercel.app/api';
 
             // Load meetings from database on component mount
@@ -140,13 +165,39 @@
                 }
             };
 
+            // AI-powered extraction
+            const callAI = async (type, content, prompt = '') => {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/ai`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type,
+                            content,
+                            prompt
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    return data.result;
+                } catch (error) {
+                    console.error('AI API Error:', error);
+                    throw error;
+                }
+            };
+
             const handleFileUpload = (event) => {
                 const uploadedFiles = Array.from(event.target.files);
                 setFiles(prev => [...prev, ...uploadedFiles]);
                 
                 // Auto-extract immediately when files are uploaded
                 setTimeout(() => {
-                    extractFromFiles(uploadedFiles);
+                    extractFromFilesWithAI(uploadedFiles);
                 }, 100);
             };
 
@@ -154,118 +205,63 @@
                 setFiles(prev => prev.filter((_, i) => i !== index));
             };
 
-            const extractFromFiles = async (filesToProcess = files) => {
+            const extractFromFilesWithAI = async (filesToProcess = files) => {
                 if (filesToProcess.length === 0) return;
-                setIsGenerating(true);
+                
+                setIsExtracting(true);
+                setAiError('');
                 
                 try {
                     let extractedContent = '';
+                    
+                    // Read all files
                     for (const file of filesToProcess) {
                         const text = await readFile(file);
-                        extractedContent += text + '\n\n';
+                        extractedContent += `\n\n=== FILE: ${file.name} ===\n${text}`;
                     }
                     
                     setRawNotes(extractedContent);
                     
-                    // Advanced extraction patterns
-                    const extractMeetingDetails = (text) => {
-                        // Date patterns
-                        const datePatterns = [
-                            /(?:date|meeting date|on)[:\s]*(\d{4}-\d{2}-\d{2})/i,
-                            /(?:date|meeting date|on)[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/i,
-                            /(\d{4}-\d{2}-\d{2})/,
-                            /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/
-                        ];
+                    // Use AI to extract meeting details
+                    try {
+                        const extractedData = await callAI('extract', extractedContent);
                         
-                        // Time patterns
-                        const timePatterns = [
-                            /(?:time|meeting time|at)[:\s]*(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i,
-                            /(\d{1,2}:\d{2}(?:\s*[AP]M)?)/
-                        ];
+                        console.log('AI Extraction Result:', extractedData);
                         
-                        // Location patterns
-                        const locationPatterns = [
-                            /(?:location|venue|place|room|address)[:\s]*([^\n\r]+)/i,
-                            /(?:brunswick|teams|zoom|skype|office)[^\n\r]*/i
-                        ];
-                        
-                        // Title patterns
-                        const titlePatterns = [
-                            /(?:title|subject|meeting|topic|re:)[:\s]*([^\n\r]+)/i,
-                            /^([A-Z][^\n\r]*(?:meeting|discussion|call|rfp|proposal))/im
-                        ];
-                        
-                        // Attendees patterns
-                        const attendeePatterns = [
-                            /(?:attendees|participants)[:\s]*([^\n\r]+)/i,
-                            /(?:company|our team)[:\s]*([^\n\r]+)/i,
-                            /(?:client|customer)[:\s]*([^\n\r]+)/i
-                        ];
-                        
-                        // Extract date
-                        for (const pattern of datePatterns) {
-                            const match = text.match(pattern);
-                            if (match) {
-                                let dateStr = match[1];
-                                try {
-                                    const date = new Date(dateStr);
-                                    if (!isNaN(date.getTime())) {
-                                        setMeetingDate(date.toISOString().split('T')[0]);
-                                        break;
-                                    }
-                                } catch (e) {}
-                            }
+                        // Update form fields with AI-extracted data
+                        if (extractedData.title) {
+                            setMeetingTitle(extractedData.title);
+                        }
+                        if (extractedData.date) {
+                            setMeetingDate(extractedData.date);
+                        }
+                        if (extractedData.time) {
+                            setMeetingTime(extractedData.time);
+                        }
+                        if (extractedData.location) {
+                            setLocation(extractedData.location);
+                        }
+                        if (extractedData.attendees) {
+                            setCompanyAttendees(extractedData.attendees);
                         }
                         
-                        // Extract time
-                        for (const pattern of timePatterns) {
-                            const match = text.match(pattern);
-                            if (match) {
-                                let timeStr = match[1].replace(/\s*(AM|PM)/i, '');
-                                setMeetingTime(timeStr);
-                                break;
-                            }
-                        }
+                    } catch (aiError) {
+                        console.error('AI extraction failed:', aiError);
+                        setAiError(`AI extraction failed: ${aiError.message}. You can still fill in the details manually.`);
                         
-                        // Extract location
-                        for (const pattern of locationPatterns) {
-                            const match = text.match(pattern);
-                            if (match) {
-                                setLocation(match[1].trim());
-                                break;
-                            }
+                        // Fallback to basic filename extraction
+                        if (filesToProcess.length > 0) {
+                            const firstFile = filesToProcess[0];
+                            const basicTitle = firstFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+                            setMeetingTitle(basicTitle);
                         }
-                        
-                        // Extract title
-                        for (const pattern of titlePatterns) {
-                            const match = text.match(pattern);
-                            if (match) {
-                                setMeetingTitle(match[1].trim());
-                                break;
-                            }
-                        }
-                        
-                        // Extract attendees
-                        const attendeeMatch = text.match(/attendees[:\s]*([^\n\r]+)/i);
-                        if (attendeeMatch) {
-                            const attendeeText = attendeeMatch[1];
-                            setCompanyAttendees(attendeeText.trim());
-                        }
-                        
-                        // Look for email addresses to identify attendees
-                        const emailPattern = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
-                        const emails = text.match(emailPattern);
-                        if (emails && emails.length > 0) {
-                            setCompanyAttendees(emails.slice(0, 3).join(', '));
-                        }
-                    };
-                    
-                    extractMeetingDetails(extractedContent);
+                    }
                     
                 } catch (error) {
-                    console.error('Error extracting from files:', error);
+                    console.error('Error processing files:', error);
+                    setAiError(`File processing failed: ${error.message}`);
                 } finally {
-                    setIsGenerating(false);
+                    setIsExtracting(false);
                 }
             };
 
@@ -278,74 +274,40 @@
                 });
             };
 
-            const generateSummary = async () => {
+            const generateSummaryWithAI = async () => {
                 if (!rawNotes.trim()) return;
+                
                 setIsGenerating(true);
+                setAiError('');
                 
                 try {
-                    // Create a professional British English summary
-                    const summary = `# Meeting Summary: ${meetingTitle || 'Strategic Discussion'}
+                    // Create context for AI
+                    const meetingContext = {
+                        title: meetingTitle || 'Meeting',
+                        date: meetingDate,
+                        time: meetingTime,
+                        location: location,
+                        companyAttendees: companyAttendees,
+                        clientAttendees: clientAttendees,
+                        content: rawNotes
+                    };
+                    
+                    const contextString = `Meeting: ${meetingContext.title}
+Date: ${meetingContext.date || 'Not specified'}
+Time: ${meetingContext.time || 'Not specified'}
+Location: ${meetingContext.location || 'Not specified'}
+Company Attendees: ${meetingContext.companyAttendees || 'Not specified'}
+Client Attendees: ${meetingContext.clientAttendees || 'Not specified'}
 
-## Meeting Overview
-
-This meeting focused on key strategic initiatives and operational requirements across multiple workstreams. The discussion established clear deliverables and action items for all stakeholders whilst addressing critical project dependencies and timeline considerations.
-
-## Key Decisions Made
-
-- Confirmed project scope and deliverable expectations for the current quarter
-- Established clear communication protocols and reporting structures between teams
-- Agreed on resource allocation methodology and responsibility assignment matrix
-- Validated technical requirements and implementation approach for upcoming phases
-
-## Action Items
-
-| Assignee | Task Description | Due Date | Priority | Status |
-|----------|------------------|----------|----------|--------|
-| Project Lead | Finalise comprehensive project specification document | TBD | High | Not Started |
-| Technical Director | Complete detailed technical feasibility assessment | TBD | High | Not Started |
-| Programme Manager | Schedule follow-up stakeholder alignment sessions | TBD | Medium | Not Started |
-| All Attendees | Review proposals and provide consolidated feedback | TBD | Medium | Not Started |
-
-## Discussion Points & Strategic Insights
-
-**Commercial Considerations:**
-- Market positioning analysis and competitive landscape assessment completed
-- Revenue optimisation strategies and commercial benefit realisation discussed
-- Risk mitigation frameworks and contingency planning protocols established
-- Investment timeline alignment with organisational strategic priorities confirmed
-
-**Technical Implementation:**
-- System integration requirements and compatibility assessments reviewed
-- Performance benchmarks and success criteria methodology established
-- Security protocols and regulatory compliance considerations addressed
-- Scalability planning for future operational expansion requirements
-
-## Financial & Resource Implications
-
-- Budget allocation framework requires executive review and formal approval
-- Resource planning matrices to be finalised pending stakeholder confirmation
-- Cost-benefit analysis demonstrates positive ROI projections across all scenarios
-- Investment phasing aligns with current fiscal year strategic objectives
-
-## Next Steps & Follow-up Actions
-
-- Comprehensive project roadmap development and stakeholder circulation
-- Strategic alignment sessions to be scheduled within the next fortnight
-- Technical documentation preparation and peer review processes
-- Implementation timeline confirmation following formal approval procedures
-
-## Outstanding Issues Requiring Resolution
-
-- Final budget approvals pending executive committee review session
-- Technical specifications require additional stakeholder consultation
-- Resource availability confirmation needed from departmental leadership
-- Regulatory compliance considerations require specialist legal review
-
-The meeting concluded with clear ownership assignments and established communication channels for ongoing project coordination. All participants demonstrated commitment to achieving agreed objectives within specified timeframes whilst maintaining operational excellence standards.`;
-
-                    setSummary(summary);
+Meeting Content:
+${meetingContext.content}`;
+                    
+                    const generatedSummary = await callAI('summarize', contextString);
+                    setSummary(generatedSummary);
+                    
                 } catch (error) {
-                    console.error('Error generating summary:', error);
+                    console.error('AI summary generation failed:', error);
+                    setAiError(`Summary generation failed: ${error.message}. Please try again or create a manual summary.`);
                 } finally {
                     setIsGenerating(false);
                 }
@@ -402,12 +364,14 @@ The meeting concluded with clear ownership assignments and established communica
                 }
             };
 
-            const handleBrainQuery = async () => {
+            const handleBrainQueryWithAI = async () => {
                 if (!brainQuery.trim() || storedMeetings.length === 0) return;
+
                 setIsBrainLoading(true);
                 setBrainResponse('');
 
                 try {
+                    // Get fresh data from database
                     const response = await fetch(`${API_BASE_URL}/meetings`);
                     let meetingsForQuery = storedMeetings;
                     
@@ -427,43 +391,27 @@ The meeting concluded with clear ownership assignments and established communica
                         }));
                     }
 
-                    const queryLower = brainQuery.toLowerCase();
-                    let response_text = '';
+                    // Prepare meeting data for AI
+                    const meetingData = meetingsForQuery.map(meeting => 
+                        `Meeting: ${meeting.title} (${meeting.date})
+Location: ${meeting.venue || 'Not specified'}
+Attendees: ${meeting.companyAttendees || ''} ${meeting.clientAttendees || ''}
+Summary: ${meeting.summary}
+---`
+                    ).join('\n\n');
 
-                    if (queryLower.includes('action') || queryLower.includes('task')) {
-                        response_text = `Based on ${meetingsForQuery.length} stored meetings, here are the action items I found:\n\n`;
-                        meetingsForQuery.forEach(meeting => {
-                            const actionMatches = meeting.summary.match(/\|[^|]+\|[^|]+\|[^|]+\|[^|]+\|[^|]+\|/g);
-                            if (actionMatches && actionMatches.length > 1) {
-                                response_text += `**${meeting.title}** (${meeting.date}):\n`;
-                                actionMatches.slice(1).forEach(action => {
-                                    const parts = action.split('|').map(p => p.trim());
-                                    if (parts.length >= 3) {
-                                        response_text += `- ${parts[2]} (Assigned to: ${parts[1]})\n`;
-                                    }
-                                });
-                                response_text += '\n';
-                            }
-                        });
-                    } else if (queryLower.includes('who') || queryLower.includes('attendees')) {
-                        response_text = `Meeting attendees across ${meetingsForQuery.length} meetings:\n\n`;
-                        meetingsForQuery.forEach(meeting => {
-                            response_text += `**${meeting.title}** (${meeting.date}):\n`;
-                            if (meeting.companyAttendees) response_text += `- Company: ${meeting.companyAttendees}\n`;
-                            if (meeting.clientAttendees) response_text += `- Client: ${meeting.clientAttendees}\n`;
-                            response_text += '\n';
-                        });
-                    } else {
-                        response_text = `I found ${meetingsForQuery.length} meetings. Here's a summary:\n\n`;
-                        meetingsForQuery.slice(0, 3).forEach(meeting => {
-                            response_text += `**${meeting.title}** (${meeting.date}):\n`;
-                            response_text += `${meeting.summary.substring(0, 200)}...\n\n`;
-                        });
-                    }
+                    const queryContext = `You have access to ${meetingsForQuery.length} stored meetings. Here's the data:
 
-                    setBrainResponse(response_text);
-                } catch (err) {
-                    setBrainResponse('An error occurred whilst processing your query. Please try again.');
+${meetingData}
+
+User Question: ${brainQuery}`;
+
+                    const aiResponse = await callAI('query', queryContext);
+                    setBrainResponse(aiResponse);
+                    
+                } catch (error) {
+                    console.error('Brain query failed:', error);
+                    setBrainResponse(`Sorry, I couldn't process your query: ${error.message}. Please try again with a different question.`);
                 } finally {
                     setIsBrainLoading(false);
                 }
@@ -487,14 +435,19 @@ The meeting concluded with clear ownership assignments and established communica
                             alignItems: 'center',
                             marginBottom: '20px'
                         }}>
-                            <h1 style={{
-                                fontSize: '32px',
-                                fontWeight: '700',
-                                color: '#374528',
-                                margin: '0'
-                            }}>
-                                Meeting Notes AI Assistant
-                            </h1>
+                            <div>
+                                <h1 style={{
+                                    fontSize: '32px',
+                                    fontWeight: '700',
+                                    color: '#374528',
+                                    margin: '0'
+                                }}>
+                                    Meeting Notes AI Assistant
+                                </h1>
+                                <div className="ai-indicator">
+                                    🤖 Powered by Google Gemini AI
+                                </div>
+                            </div>
                             
                             <button
                                 onClick={() => setShowBrain(!showBrain)}
@@ -521,7 +474,287 @@ The meeting concluded with clear ownership assignments and established communica
                         maxWidth: '1200px',
                         margin: '0 auto'
                     }}>
-                        {/* Success/Error Messages */}
+                        {/* Summary and Brain Grid */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: showBrain ? '2fr 1fr' : '1fr',
+                            gap: '24px'
+                        }}>
+                            {/* Summary Section */}
+                            {summary && (
+                                <section style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '12px',
+                                    padding: '24px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginBottom: '16px'
+                                    }}>
+                                        <h2 style={{
+                                            fontSize: '20px',
+                                            fontWeight: '600',
+                                            color: '#374528',
+                                            margin: '0'
+                                        }}>
+                                            📋 AI-Generated Summary
+                                            <span className="ai-indicator">
+                                                🤖 Powered by AI
+                                            </span>
+                                        </h2>
+                                        <button
+                                            onClick={saveToBrain}
+                                            disabled={!summary.trim()}
+                                            style={{
+                                                padding: '8px 16px',
+                                                backgroundColor: summary.trim() ? '#6b7c4e' : '#9ca3af',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                cursor: summary.trim() ? 'pointer' : 'not-allowed',
+                                                fontSize: '14px',
+                                                fontWeight: '500'
+                                            }}
+                                        >
+                                            🧠 Save to Brain
+                                        </button>
+                                    </div>
+                                    <div style={{
+                                        padding: '16px',
+                                        backgroundColor: '#f8faf6',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e5e7eb',
+                                        whiteSpace: 'pre-wrap',
+                                        fontSize: '14px',
+                                        lineHeight: '1.6',
+                                        maxHeight: '600px',
+                                        overflowY: 'auto'
+                                    }}>
+                                        {summary}
+                                    </div>
+                                </section>
+                            )}
+
+                            {/* Brain Panel */}
+                            {showBrain && (
+                                <div style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '12px',
+                                    padding: '24px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                    height: 'fit-content'
+                                }}>
+                                    <h2 style={{ 
+                                        fontSize: '20px', 
+                                        fontWeight: '600', 
+                                        marginBottom: '16px',
+                                        color: '#374528',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        🧠 AI Meeting Brain
+                                        <span className="ai-indicator">
+                                            🤖 AI Powered
+                                        </span>
+                                    </h2>
+
+                                    {/* Query Section */}
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            color: '#374528'
+                                        }}>
+                                            Ask AI about your meetings:
+                                        </label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <input
+                                                type="text"
+                                                value={brainQuery}
+                                                onChange={(e) => setBrainQuery(e.target.value)}
+                                                placeholder="e.g., What were the main action items from the training meeting?"
+                                                onKeyPress={(e) => e.key === 'Enter' && handleBrainQueryWithAI()}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px 12px',
+                                                    border: '1px solid #d1d5db',
+                                                    borderRadius: '6px',
+                                                    fontSize: '14px'
+                                                }}
+                                            />
+                                            <button
+                                                onClick={handleBrainQueryWithAI}
+                                                disabled={!brainQuery.trim() || storedMeetings.length === 0 || isBrainLoading}
+                                                style={{
+                                                    padding: '8px 16px',
+                                                    backgroundColor: (brainQuery.trim() && storedMeetings.length > 0) ? '#6b7c4e' : '#9ca3af',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '6px',
+                                                    cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
+                                                    fontSize: '14px',
+                                                    fontWeight: '500'
+                                                }}
+                                            >
+                                                {isBrainLoading ? '🤖' : '🔍'}
+                                            </button>
+                                        </div>
+                                        {storedMeetings.length === 0 && (
+                                            <p style={{
+                                                fontSize: '12px',
+                                                color: '#6b7280',
+                                                marginTop: '4px'
+                                            }}>
+                                                Save some meetings to start querying your Brain!
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Response Section */}
+                                    {brainResponse && (
+                                        <div style={{
+                                            padding: '12px',
+                                            backgroundColor: '#f8faf6',
+                                            borderRadius: '8px',
+                                            marginBottom: '20px',
+                                            border: '1px solid #e5e7eb'
+                                        }}>
+                                            <h4 style={{
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                marginBottom: '8px',
+                                                color: '#374528',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                🤖 AI Response:
+                                            </h4>
+                                            <div style={{
+                                                fontSize: '14px',
+                                                lineHeight: '1.5',
+                                                whiteSpace: 'pre-wrap'
+                                            }}>
+                                                {brainResponse}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Stored Meetings List */}
+                                    <div>
+                                        <h3 style={{
+                                            fontSize: '16px',
+                                            fontWeight: '600',
+                                            marginBottom: '12px',
+                                            color: '#374528'
+                                        }}>
+                                            Stored Meetings ({storedMeetings.length})
+                                        </h3>
+                                        
+                                        {isLoadingMeetings ? (
+                                            <div style={{ textAlign: 'center', padding: '20px' }}>
+                                                <div>🔄 Loading meetings...</div>
+                                            </div>
+                                        ) : storedMeetings.length === 0 ? (
+                                            <div style={{
+                                                textAlign: 'center',
+                                                padding: '20px',
+                                                color: '#6b7280',
+                                                fontSize: '14px'
+                                            }}>
+                                                No meetings stored yet. Upload files and generate AI summaries to get started!
+                                            </div>
+                                        ) : (
+                                            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                {storedMeetings.map((meeting) => (
+                                                    <div key={meeting.id} style={{
+                                                        padding: '12px',
+                                                        backgroundColor: '#f8faf6',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '8px',
+                                                        border: '1px solid #e5e7eb'
+                                                    }}>
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'flex-start',
+                                                            marginBottom: '8px'
+                                                        }}>
+                                                            <div>
+                                                                <h4 style={{
+                                                                    fontSize: '14px',
+                                                                    fontWeight: '600',
+                                                                    margin: '0 0 4px 0',
+                                                                    color: '#374528'
+                                                                }}>
+                                                                    {meeting.title}
+                                                                </h4>
+                                                                <div style={{
+                                                                    fontSize: '12px',
+                                                                    color: '#6b7280'
+                                                                }}>
+                                                                    📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
+                                                                    {meeting.venue && ` • 📍 ${meeting.venue}`}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => deleteMeeting(meeting.id)}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    color: '#dc3545',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '14px',
+                                                                    padding: '4px'
+                                                                }}
+                                                                title="Delete meeting"
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        </div>
+                                                        {(meeting.companyAttendees || meeting.clientAttendees) && (
+                                                            <div style={{
+                                                                fontSize: '12px',
+                                                                color: '#6b7280',
+                                                                marginBottom: '8px'
+                                                            }}>
+                                                                {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
+                                                                {meeting.companyAttendees && meeting.clientAttendees && ' • '}
+                                                                {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
+                                                            </div>
+                                                        )}
+                                                        <div style={{
+                                                            fontSize: '12px',
+                                                            color: '#374528',
+                                                            maxHeight: '60px',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {meeting.summary.substring(0, 150)}...
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>/* Success/Error Messages */}
                         {showSaveSuccess && (
                             <div style={{
                                 backgroundColor: '#d4edda',
@@ -536,15 +769,14 @@ The meeting concluded with clear ownership assignments and established communica
                         )}
 
                         {saveError && (
-                            <div style={{
-                                backgroundColor: '#f8d7da',
-                                border: '1px solid #f5c6cb',
-                                borderRadius: '8px',
-                                padding: '12px',
-                                marginBottom: '20px',
-                                color: '#721c24'
-                            }}>
+                            <div className="error-message">
                                 ❌ {saveError}
+                            </div>
+                        )}
+
+                        {aiError && (
+                            <div className="error-message">
+                                ⚠️ {aiError}
                             </div>
                         )}
 
@@ -569,6 +801,11 @@ The meeting concluded with clear ownership assignments and established communica
                                     color: '#374528'
                                 }}>
                                     📁 Upload Meeting Files
+                                    {isExtracting && (
+                                        <span className="ai-indicator processing">
+                                            🤖 AI Extracting...
+                                        </span>
+                                    )}
                                 </h2>
                                 
                                 <div className="custom-file-input">
@@ -578,18 +815,19 @@ The meeting concluded with clear ownership assignments and established communica
                                         accept=".txt,.docx,.pdf,.md"
                                         onChange={handleFileUpload}
                                         id="file-upload"
+                                        disabled={isExtracting}
                                     />
                                     <label htmlFor="file-upload" style={{
                                         display: 'inline-block',
                                         padding: '12px 24px',
-                                        backgroundColor: '#6b7c4e',
+                                        backgroundColor: isExtracting ? '#9ca3af' : '#6b7c4e',
                                         color: 'white',
                                         borderRadius: '8px',
-                                        cursor: 'pointer',
+                                        cursor: isExtracting ? 'not-allowed' : 'pointer',
                                         fontSize: '14px',
                                         fontWeight: '500'
                                     }}>
-                                        Choose Files
+                                        {isExtracting ? 'Processing...' : 'Choose Files'}
                                     </label>
                                 </div>
 
@@ -654,7 +892,7 @@ The meeting concluded with clear ownership assignments and established communica
                                 <textarea
                                     value={rawNotes}
                                     onChange={(e) => setRawNotes(e.target.value)}
-                                    placeholder="Paste your meeting notes here or upload files to auto-extract..."
+                                    placeholder="Paste your meeting notes here or upload files for AI extraction..."
                                     style={{
                                         width: '100%',
                                         height: '300px',
@@ -685,6 +923,11 @@ The meeting concluded with clear ownership assignments and established communica
                                 color: '#374528'
                             }}>
                                 📅 Meeting Details
+                                {(meetingTitle || meetingDate || meetingTime || location || companyAttendees) && (
+                                    <span className="ai-indicator">
+                                        🤖 AI Extracted
+                                    </span>
+                                )}
                             </h2>
                             
                             <div style={{
@@ -803,323 +1046,388 @@ The meeting concluded with clear ownership assignments and established communica
                                     <input
                                         type="text"
                                         value={companyAttendees}
-                                       onChange={(e) => setCompanyAttendees(e.target.value)}
-                                       placeholder="Company attendees"
-                                       style={{
-                                           width: '100%',
-                                           padding: '8px 12px',
-                                           border: '1px solid #d1d5db',
-                                           borderRadius: '6px',
-                                           fontSize: '14px'
-                                       }}
-                                   />
-                               </div>
-                               
-                               <div>
-                                   <label style={{
-                                       display: 'block',
-                                       marginBottom: '4px',
-                                       fontSize: '14px',
-                                       fontWeight: '500',
-                                       color: '#374528'
-                                   }}>
-                                       Client Attendees
-                                   </label>
-                                   <input
-                                       type="text"
-                                       value={clientAttendees}
-                                       onChange={(e) => setClientAttendees(e.target.value)}
-                                       placeholder="Client attendees"
-                                       style={{
-                                           width: '100%',
-                                           padding: '8px 12px',
-                                           border: '1px solid #d1d5db',
-                                           borderRadius: '6px',
-                                           fontSize: '14px'
-                                       }}
-                                   />
-                               </div>
-                           </div>
-                           
-                           <button
-                               onClick={generateSummary}
-                               disabled={!rawNotes.trim() || isGenerating}
-                               style={{
-                                   marginTop: '20px',
-                                   padding: '12px 24px',
-                                   backgroundColor: rawNotes.trim() ? '#6b7c4e' : '#9ca3af',
-                                   color: 'white',
-                                   border: 'none',
-                                   borderRadius: '8px',
-                                   cursor: rawNotes.trim() ? 'pointer' : 'not-allowed',
-                                   fontSize: '14px',
-                                   fontWeight: '500'
-                               }}
-                           >
-                               {isGenerating ? '🔄 Generating Summary...' : '✨ Generate Professional Summary'}
-                           </button>
-                       </section>
+                                        onChange={(e) => setCompanyAttendees(e.target.value)}
+                                        placeholder="Company attendees"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '6px',
+                                            fontSize: '14px'
+                                        }}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        marginBottom: '4px',
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#374528'
+                                    }}>
+                                        Client Attendees
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={clientAttendees}
+                                        onChange={(e) => setClientAttendees(e.target.value)}
+                                        placeholder="Client attendees"
+                                        style={{
+                                            width: '100%',
+                                            padding: '8px 12px',
+                                            border: '1px solid #d1d5db',
+                                            borderRadius: '6px',
+                                            fontSize: '14px'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            
+                            <button
+                                onClick={generateSummaryWithAI}
+                                disabled={!rawNotes.trim() || isGenerating}
+                                style={{
+                                    marginTop: '20px',
+                                    padding: '12px 24px',
+                                    backgroundColor: rawNotes.trim() ? '#6b7c4e' : '#9ca3af',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: rawNotes.trim() && !isGenerating ? 'pointer' : 'not-allowed',
+                                    fontSize: '14px',
+                                    fontWeight: '500',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px'
+                                }}
+                            >
+                                {isGenerating ? (
+                                    <>🤖 AI Generating Summary...</>
+                                ) : (
+                                    <>🤖 Generate AI Summary</>
+                                )}
+                            </button>
+                        </section>
 
-                       {/* Summary and Brain Grid */}
-                       <div style={{
-                           display: 'grid',
-                           gridTemplateColumns: showBrain ? '2fr 1fr' : '1fr',
-                           gap: '24px'
-                       }}>
-                           {/* Summary Section */}
-                           {summary && (
-                               <section style={{
-                                   backgroundColor: 'white',
-                                   borderRadius: '12px',
-                                   padding: '24px',
-                                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                               }}>
-                                   <div style={{
-                                       display: 'flex',
-                                       justifyContent: 'space-between',
-                                       alignItems: 'center',
-                                       marginBottom: '16px'
-                                   }}>
-                                       <h2 style={{
-                                           fontSize: '20px',
-                                           fontWeight: '600',
-                                           color: '#374528',
-                                           margin: '0'
-                                       }}>
-                                           📋 Professional Summary
-                                       </h2>
-                                       <button
-                                           onClick={saveToBrain}
-                                           disabled={!summary.trim()}
-                                           style={{
-                                               padding: '8px 16px',
-                                               backgroundColor: summary.trim() ? '#6b7c4e' : '#9ca3af',
-                                               color: 'white',
-                                               border: 'none',
-                                               borderRadius: '6px',
-                                               cursor: summary.trim() ? 'pointer' : 'not-allowed',
-                                               fontSize: '14px',
-                                               fontWeight: '500'
-                                           }}
-                                       >
-                                           🧠 Save to Brain
-                                       </button>
-                                   </div>
-                                   <div style={{
-                                       padding: '16px',
-                                       backgroundColor: '#f8faf6',
-                                       borderRadius: '8px',
-                                       border: '1px solid #e5e7eb',
-                                       whiteSpace: 'pre-wrap',
-                                       fontSize: '14px',
-                                       lineHeight: '1.6',
-                                       maxHeight: '600px',
-                                       overflowY: 'auto'
-                                   }}>
-                                       {summary}
-                                   </div>
-                               </section>
-                           )}
+                        {/* Summary and Brain Grid */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: showBrain ? '2fr 1fr' : '1fr',
+                            gap: '24px'
+                        }}>
+                            {/* Summary Section */}
+                            {summary && (
+                                <section style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '12px',
+                                    padding: '24px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                                }}>
+                                    <div style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginBottom: '16px'
+                                    }}>
+                                        <h2 style={{
+                                            fontSize: '20px',
+                                            fontWeight: '600',
+                                            color: '#374528',
+                                            margin: '0',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px'
+                                        }}>
+                                            📋 AI-Generated Summary
+                                            <span className="ai-indicator">
+                                                🤖 Generated by AI
+                                            </span>
+                                        </h2>
+                                        <button
+                                            onClick={saveToBrain}
+                                            disabled={!summary.trim()}
+                                            style={{
+                                                padding: '8px 16px',
+                                                backgroundColor: summary.trim() ? '#6b7c4e' : '#9ca3af',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                cursor: summary.trim() ? 'pointer' : 'not-allowed',
+                                                fontSize: '14px',
+                                                fontWeight: '500'
+                                            }}
+                                        >
+                                            🧠 Save to Brain
+                                        </button>
+                                    </div>
+                                    <div style={{
+                                        padding: '16px',
+                                        backgroundColor: '#f8faf6',
+                                        borderRadius: '8px',
+                                        border: '1px solid #e5e7eb',
+                                        whiteSpace: 'pre-wrap',
+                                        fontSize: '14px',
+                                        lineHeight: '1.6',
+                                        maxHeight: '600px',
+                                        overflowY: 'auto'
+                                    }}>
+                                        {summary}
+                                    </div>
+                                </section>
+                            )}
 
-                           {/* Brain Panel */}
-                           {showBrain && (
-                               <div style={{
-                                   backgroundColor: 'white',
-                                   borderRadius: '12px',
-                                   padding: '24px',
-                                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                                   height: 'fit-content'
-                               }}>
-                                   <h2 style={{ 
-                                       fontSize: '20px', 
-                                       fontWeight: '600', 
-                                       marginBottom: '16px',
-                                       color: '#374528',
-                                       display: 'flex',
-                                       alignItems: 'center',
-                                       gap: '8px'
-                                   }}>
-                                       🧠 Meeting Brain
-                                   </h2>
+                            {/* Brain Panel */}
+                            {showBrain && (
+                                <div style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '12px',
+                                    padding: '24px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                                    height: 'fit-content'
+                                }}>
+                                    <h2 style={{ 
+                                        fontSize: '20px', 
+                                        fontWeight: '600', 
+                                        marginBottom: '16px',
+                                        color: '#374528',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}>
+                                        🧠 AI Meeting Brain
+                                        <span className="ai-indicator">
+                                            🤖 AI Powered
+                                        </span>
+                                    </h2>
 
-                                   {/* Query Section */}
-                                   <div style={{ marginBottom: '20px' }}>
-                                       <label style={{
-                                           display: 'block',
-                                           marginBottom: '8px',
-                                           fontSize: '14px',
-                                           fontWeight: '500',
-                                           color: '#374528'
-                                       }}>
-                                           Ask about your meetings:
-                                       </label>
-                                       <div style={{ display: 'flex', gap: '8px' }}>
-                                           <input
-                                               type="text"
-                                               value={brainQuery}
-                                               onChange={(e) => setBrainQuery(e.target.value)}
-                                               placeholder="e.g., What action items were assigned to Maria?"
-                                               onKeyPress={(e) => e.key === 'Enter' && handleBrainQuery()}
-                                               style={{
-                                                   flex: 1,
-                                                   padding: '8px 12px',
-                                                   border: '1px solid #d1d5db',
-                                                   borderRadius: '6px',
-                                                   fontSize: '14px'
-                                               }}
-                                           />
-                                           <button
-                                               onClick={handleBrainQuery}
-                                               disabled={!brainQuery.trim() || storedMeetings.length === 0 || isBrainLoading}
-                                               style={{
-                                                   padding: '8px 16px',
-                                                   backgroundColor: (brainQuery.trim() && storedMeetings.length > 0) ? '#6b7c4e' : '#9ca3af',
-                                                   color: 'white',
-                                                   border: 'none',
-                                                   borderRadius: '6px',
-                                                   cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
-                                                   fontSize: '14px',
-                                                   fontWeight: '500'
-                                               }}
-                                           >
-                                               {isBrainLoading ? '🔄' : '🔍'}
-                                           </button>
-                                       </div>
-                                   </div>
+                                    {/* Query Section */}
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            marginBottom: '8px',
+                                            fontSize: '14px',
+                                            fontWeight: '500',
+                                            color: '#374528'
+                                        }}>
+                                            Ask AI about your meetings:
+                                        </label>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <input
+                                                type="text"
+                                                value={brainQuery}
+                                                onChange={(e) => setBrainQuery(e.target.value)}
+                                                placeholder="e.g., What training was discussed? Who attended the June meeting?"
+                                                onKeyPress={(e) => e.key === 'Enter' && handleBrainQueryWithAI()}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '8px 12px',
+                                                    border: '1px solid #d1d5db',
+                                                    borderRadius: '6px',
+                                                    fontSize: '14px'
+                                                }}
+                                            />
+                                            <button
+                                                onClick={handleBrainQueryWithAI}
+                                                disabled={!brainQuery.trim() || storedMeetings.length === 0 || isBrainLoading}
+                                                style={{
+                                                    padding: '8px 16px',
+                                                    backgroundColor: (brainQuery.trim() && storedMeetings.length > 0) ? '#6b7c4e' : '#9ca3af',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '6px',
+                                                    cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
+                                                    fontSize: '14px',
+                                                    fontWeight: '500'
+                                                }}
+                                            >
+                                                {isBrainLoading ? '🤖' : '🔍'}
+                                            </button>
+                                        </div>
+                                        
+                                        {/* Quick query suggestions */}
+                                        {storedMeetings.length > 0 && (
+                                            <div style={{ marginTop: '8px' }}>
+                                                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                                                    Quick questions:
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                    {[
+                                                        'What action items were discussed?',
+                                                        'Who attended the meetings?',
+                                                        'What decisions were made?',
+                                                        'What are the next steps?'
+                                                    ].map((suggestion, index) => (
+                                                        <button
+                                                            key={index}
+                                                            onClick={() => setBrainQuery(suggestion)}
+                                                            style={{
+                                                                padding: '4px 8px',
+                                                                fontSize: '11px',
+                                                                backgroundColor: '#f3f4f6',
+                                                                border: '1px solid #e5e7eb',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                color: '#374528'
+                                                            }}
+                                                        >
+                                                            {suggestion}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
-                                   {/* Response Section */}
-                                   {brainResponse && (
-                                       <div style={{
-                                           padding: '12px',
-                                           backgroundColor: '#f8faf6',
-                                           borderRadius: '8px',
-                                           marginBottom: '20px',
-                                           border: '1px solid #e5e7eb'
-                                       }}>
-                                           <h4 style={{
-                                               fontSize: '14px',
-                                               fontWeight: '600',
-                                               marginBottom: '8px',
-                                               color: '#374528'
-                                           }}>
-                                               Response:
-                                           </h4>
-                                           <div style={{
-                                               fontSize: '14px',
-                                               lineHeight: '1.5',
-                                               whiteSpace: 'pre-wrap'
-                                           }}>
-                                               {brainResponse}
-                                           </div>
-                                       </div>
-                                   )}
+                                    {/* Response Section */}
+                                    {brainResponse && (
+                                        <div style={{
+                                            padding: '12px',
+                                            backgroundColor: '#f8faf6',
+                                            borderRadius: '8px',
+                                            marginBottom: '20px',
+                                            border: '1px solid #e5e7eb'
+                                        }}>
+                                            <h4 style={{
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                marginBottom: '8px',
+                                                color: '#374528',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                🤖 AI Response:
+                                            </h4>
+                                            <div style={{
+                                                fontSize: '14px',
+                                                lineHeight: '1.5',
+                                                whiteSpace: 'pre-wrap'
+                                            }}>
+                                                {brainResponse}
+                                            </div>
+                                        </div>
+                                    )}
 
-                                   {/* Stored Meetings List */}
-                                   <div>
-                                       <h3 style={{
-                                           fontSize: '16px',
-                                           fontWeight: '600',
-                                           marginBottom: '12px',
-                                           color: '#374528'
-                                       }}>
-                                           Stored Meetings ({storedMeetings.length})
-                                       </h3>
-                                       
-                                       {isLoadingMeetings ? (
-                                           <div style={{ textAlign: 'center', padding: '20px' }}>
-                                               <div>🔄 Loading meetings...</div>
-                                           </div>
-                                       ) : storedMeetings.length === 0 ? (
-                                           <div style={{
-                                               textAlign: 'center',
-                                               padding: '20px',
-                                               color: '#6b7280',
-                                               fontSize: '14px'
-                                           }}>
-                                               No meetings stored yet. Generate and save a summary to get started!
-                                           </div>
-                                       ) : (
-                                           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                               {storedMeetings.map((meeting) => (
-                                                   <div key={meeting.id} style={{
-                                                       padding: '12px',
-                                                       backgroundColor: '#f8faf6',
-                                                       borderRadius: '8px',
-                                                       marginBottom: '8px',
-                                                       border: '1px solid #e5e7eb'
-                                                   }}>
-                                                       <div style={{
-                                                           display: 'flex',
-                                                           justifyContent: 'space-between',
-                                                           alignItems: 'flex-start',
-                                                           marginBottom: '8px'
-                                                       }}>
-                                                           <div>
-                                                               <h4 style={{
-                                                                   fontSize: '14px',
-                                                                   fontWeight: '600',
-                                                                   margin: '0 0 4px 0',
-                                                                   color: '#374528'
-                                                               }}>
-                                                                   {meeting.title}
-                                                               </h4>
-                                                               <div style={{
-                                                                   fontSize: '12px',
-                                                                   color: '#6b7280'
-                                                               }}>
-                                                                   📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
-                                                                   {meeting.venue && ` • 📍 ${meeting.venue}`}
-                                                               </div>
-                                                           </div>
-                                                           <button
-                                                               onClick={() => deleteMeeting(meeting.id)}
-                                                               style={{
-                                                                   background: 'none',
-                                                                   border: 'none',
-                                                                   color: '#dc3545',
-                                                                   cursor: 'pointer',
-                                                                   fontSize: '14px',
-                                                                   padding: '4px'
-                                                               }}
-                                                               title="Delete meeting"
-                                                           >
-                                                               🗑️
-                                                           </button>
-                                                       </div>
-                                                       {(meeting.companyAttendees || meeting.clientAttendees) && (
-                                                           <div style={{
-                                                               fontSize: '12px',
-                                                               color: '#6b7280',
-                                                               marginBottom: '8px'
-                                                           }}>
-                                                               {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
-                                                               {meeting.companyAttendees && meeting.clientAttendees && ' • '}
-                                                               {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
-                                                           </div>
-                                                       )}
-                                                       <div style={{
-                                                           fontSize: '12px',
-                                                           color: '#374528',
-                                                           maxHeight: '60px',
-                                                           overflow: 'hidden',
-                                                           textOverflow: 'ellipsis'
-                                                       }}>
-                                                           {meeting.summary.substring(0, 150)}...
-                                                       </div>
-                                                   </div>
-                                               ))}
-                                           </div>
-                                       )}
-                                   </div>
-                               </div>
-                           )}
-                       </div>
-                   </main>
-               </div>
-           );
-       }
+                                    {isBrainLoading && (
+                                        <div style={{
+                                            padding: '20px',
+                                            textAlign: 'center',
+                                            color: '#6b7280',
+                                            backgroundColor: '#f8faf6',
+                                            borderRadius: '8px',
+                                            marginBottom: '20px'
+                                        }}>
+                                            🤖 AI is analyzing your meetings...
+                                        </div>
+                                    )}
 
-       ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
-   </script>
+                                    {/* Stored Meetings List */}
+                                    <div>
+                                        <h3 style={{
+                                            fontSize: '16px',
+                                            fontWeight: '600',
+                                            marginBottom: '12px',
+                                            color: '#374528'
+                                        }}>
+                                            Stored Meetings ({storedMeetings.length})
+                                        </h3>
+                                        
+                                        {isLoadingMeetings ? (
+                                            <div style={{ textAlign: 'center', padding: '20px' }}>
+                                                <div>🔄 Loading meetings...</div>
+                                            </div>
+                                        ) : storedMeetings.length === 0 ? (
+                                            <div style={{
+                                                textAlign: 'center',
+                                                padding: '20px',
+                                                color: '#6b7280',
+                                                fontSize: '14px'
+                                            }}>
+                                                No meetings stored yet. Generate and save an AI summary to get started!
+                                            </div>
+                                        ) : (
+                                            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                {storedMeetings.map((meeting) => (
+                                                    <div key={meeting.id} style={{
+                                                        padding: '12px',
+                                                        backgroundColor: '#f8faf6',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '8px',
+                                                        border: '1px solid #e5e7eb'
+                                                    }}>
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'flex-start',
+                                                            marginBottom: '8px'
+                                                        }}>
+                                                            <div>
+                                                                <h4 style={{
+                                                                    fontSize: '14px',
+                                                                    fontWeight: '600',
+                                                                    margin: '0 0 4px 0',
+                                                                    color: '#374528'
+                                                                }}>
+                                                                    {meeting.title}
+                                                                </h4>
+                                                                <div style={{
+                                                                    fontSize: '12px',
+                                                                    color: '#6b7280'
+                                                                }}>
+                                                                    📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
+                                                                    {meeting.venue && ` • 📍 ${meeting.venue}`}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => deleteMeeting(meeting.id)}
+                                                                style={{
+                                                                    background: 'none',
+                                                                    border: 'none',
+                                                                    color: '#dc3545',
+                                                                    cursor: 'pointer',
+                                                                    fontSize: '14px',
+                                                                    padding: '4px'
+                                                                }}
+                                                                title="Delete meeting"
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        </div>
+                                                        {(meeting.companyAttendees || meeting.clientAttendees) && (
+                                                            <div style={{
+                                                                fontSize: '12px',
+                                                                color: '#6b7280',
+                                                                marginBottom: '8px'
+                                                            }}>
+                                                                {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
+                                                                {meeting.companyAttendees && meeting.clientAttendees && ' • '}
+                                                                {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
+                                                            </div>
+                                                        )}
+                                                        <div style={{
+                                                            fontSize: '12px',
+                                                            color: '#374528',
+                                                            maxHeight: '60px',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {meeting.summary.substring(0, 150)}...
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
+    </script>
 </body>
 </html>
