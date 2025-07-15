@@ -486,6 +486,10 @@
                 });
             };
 
+            const refreshPage = () => {
+                window.location.reload();
+            };
+
             const generateSummaryWithAI = async () => {
                 if (!rawNotes.trim()) return;
                 
@@ -756,12 +760,20 @@ User Question: ${brainQuery}`;
                             marginBottom: '20px'
                         }}>
                             <div>
-                                <h1 style={{
-                                    fontSize: '32px',
-                                    fontWeight: '700',
-                                    color: '#374528',
-                                    margin: '0'
-                                }}>
+                                <h1 
+                                    onClick={refreshPage}
+                                    style={{
+                                        fontSize: '32px',
+                                        fontWeight: '700',
+                                        color: '#374528',
+                                        margin: '0',
+                                        cursor: 'pointer',
+                                        transition: 'color 0.2s ease',
+                                    }}
+                                    onMouseEnter={(e) => e.target.style.color = '#6b7c4e'}
+                                    onMouseLeave={(e) => e.target.style.color = '#374528'}
+                                    title="Click to refresh page"
+                                >
                                     Meeting Notes AI Assistant
                                 </h1>
                                 <div className="ai-indicator">
@@ -1248,7 +1260,7 @@ User Question: ${brainQuery}`;
                                                 onClick={handleEditToggle}
                                                 style={{
                                                     padding: '6px 12px',
-                                                    backgroundColor: isEditingMode ? '#dc3545' : '#6c757d',
+                                                    backgroundColor: isEditingMode ? '#28a745' : '#6c757d',
                                                     color: 'white',
                                                     border: 'none',
                                                     borderRadius: '4px',
@@ -1257,14 +1269,14 @@ User Question: ${brainQuery}`;
                                                     fontWeight: '500'
                                                 }}
                                             >
-                                                {isEditingMode ? '❌ Cancel' : '✏️ Edit'}
+                                                {isEditingMode ? '✅ Save Changes' : '✏️ Edit'}
                                             </button>
                                             {isEditingMode && (
                                                 <button
-                                                    onClick={handleEditToggle}
+                                                    onClick={handleEditCancel}
                                                     style={{
                                                         padding: '6px 12px',
-                                                        backgroundColor: '#28a745',
+                                                        backgroundColor: '#dc3545',
                                                         color: 'white',
                                                         border: 'none',
                                                         borderRadius: '4px',
@@ -1273,7 +1285,7 @@ User Question: ${brainQuery}`;
                                                         fontWeight: '500'
                                                     }}
                                                 >
-                                                    ✅ Save Changes
+                                                    ❌ Cancel
                                                 </button>
                                             )}
                                         </div>
