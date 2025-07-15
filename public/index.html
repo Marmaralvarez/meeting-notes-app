@@ -152,11 +152,11 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Enhanced markdown renderer
+        // Enhanced markdown renderer with table fix
         const renderMarkdown = (text) => {
             if (!text) return '';
             
-            return text
+            let processed = text
                 // Headers
                 .replace(/^# (.*$)/gim, '<h1>$1</h1>')
                 .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -167,33 +167,67 @@
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 
-                // Tables - improved table parsing
-                .replace(/^\|(.+)\|$/gim, (match, content) => {
-                    const cells = content.split('|').map(cell => cell.trim());
-                    return `<tr>${cells.map(cell => `<td>${cell}</td>`).join('')}</tr>`;
-                })
+                // Line breaks first (before table processing)
+                .replace(/\n/g, '<br>');
+            
+            // Handle tables separately to avoid conflicts with <br> tags
+            const tableRegex = /(\|[^|]+\|(?:<br>\|[^|]+\|)*)/g;
+            processed = processed.replace(tableRegex, (match) => {
+                // Remove <br> tags within table matches for processing
+                const tableContent = match.replace(/<br>/g, '\n');
+                const lines = tableContent.split('\n').filter(line => line.trim());
                 
-                // Wrap table rows in table tags
-                .replace(/(<tr>.*?<\/tr>(?:\s*<tr>.*?<\/tr>)*)/gs, (match) => {
-                    const rows = match.match(/<tr>.*?<\/tr>/g);
-                    if (!rows || rows.length === 0) return match;
-                    
-                    // First row as header
-                    const headerRow = rows[0].replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>');
-                    const dataRows = rows.slice(1).join('');
-                    
-                    return `<table>${headerRow}${dataRows}</table>`;
-                })
+                if (lines.length < 2) return match;
                 
-                // Lists
+                const tableRows = lines.map(line => {
+                    const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+                    return cells;
+                }).filter(row => row.length > 0);
+                
+                if (tableRows.length === 0) return match;
+                
+                // Skip separator rows (rows with only dashes)
+                const dataRows = tableRows.filter(row => 
+                    !row.every(cell => /^[-\s]*$/.test(cell))
+                );
+                
+                if (dataRows.length === 0) return match;
+                
+                // First row as header
+                const headerRow = dataRows[0];
+                const bodyRows = dataRows.slice(1);
+                
+                let tableHtml = '<table>';
+                
+                // Header
+                tableHtml += '<tr>';
+                headerRow.forEach(cell => {
+                    tableHtml += `<th>${cell}</th>`;
+                });
+                tableHtml += '</tr>';
+                
+                // Body rows
+                bodyRows.forEach(row => {
+                    tableHtml += '<tr>';
+                    row.forEach(cell => {
+                        tableHtml += `<td>${cell}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                });
+                
+                tableHtml += '</table>';
+                return tableHtml;
+            });
+            
+            // Lists (after table processing)
+            processed = processed
                 .replace(/^[-*] (.*$)/gim, '<li>$1</li>')
                 .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
                 
                 // Wrap consecutive list items
-                .replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>')
-                
-                // Line breaks
-                .replace(/\n/g, '<br>');
+                .replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>');
+            
+            return processed;
         };
 
         function MeetingNotesApp() {
@@ -201,6 +235,8 @@
             const [files, setFiles] = useState([]);
             const [rawNotes, setRawNotes] = useState('');
             const [summary, setSummary] = useState('');
+            const [editableSummary, setEditableSummary] = useState('');
+            const [isEditingMode, setIsEditingMode] = useState(false);
             const [isGenerating, setIsGenerating] = useState(false);
             const [isExtracting, setIsExtracting] = useState(false);
             const [meetingDate, setMeetingDate] = useState('');
@@ -483,6 +519,8 @@ ${meetingContext.content}`;
                     
                     const generatedSummary = await callAI('summarize', contextString);
                     setSummary(generatedSummary);
+                    setEditableSummary(generatedSummary);
+                    setIsEditingMode(false);
                     
                 } catch (error) {
                     console.error('AI summary generation failed:', error);
@@ -493,7 +531,9 @@ ${meetingContext.content}`;
             };
 
             const saveToBrain = async () => {
-                if (!summary.trim()) {
+                const summaryToSave = isEditingMode ? editableSummary : summary;
+                
+                if (!summaryToSave.trim()) {
                     setAiError('No summary to save');
                     return;
                 }
@@ -515,7 +555,7 @@ ${meetingContext.content}`;
                     client: client || '', // New field
                     project: project || '', // New field
                     rawNotes: rawNotes || '',
-                    summary: summary,
+                    summary: summaryToSave,
                     createdAt: new Date().toISOString()
                 };
                 
@@ -579,6 +619,67 @@ ${meetingContext.content}`;
                     setSaveError('Failed to delete meeting. Please try again.');
                     setTimeout(() => setSaveError(''), 5000);
                 }
+            };
+
+            const exportSummary = () => {
+                const summaryToExport = isEditingMode ? editableSummary : summary;
+                const meetingInfo = `Meeting: ${meetingTitle || 'Untitled Meeting'}
+Date: ${meetingDate || 'Not specified'}
+Time: ${meetingTime || 'Not specified'}
+Location: ${location || 'Not specified'}
+Client: ${client || 'Not specified'}
+Project: ${project || 'Not specified'}
+Company Attendees: ${companyAttendees || 'Not specified'}
+Client Attendees: ${clientAttendees || 'Not specified'}
+
+${summaryToExport}`;
+
+                const blob = new Blob([meetingInfo], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${meetingTitle || 'meeting'}-${meetingDate || new Date().toISOString().split('T')[0]}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            const copySummary = async () => {
+                const summaryToCopy = isEditingMode ? editableSummary : summary;
+                const meetingInfo = `Meeting: ${meetingTitle || 'Untitled Meeting'}
+Date: ${meetingDate || 'Not specified'}
+Time: ${meetingTime || 'Not specified'}
+Location: ${location || 'Not specified'}
+Client: ${client || 'Not specified'}
+Project: ${project || 'Not specified'}
+Company Attendees: ${companyAttendees || 'Not specified'}
+Client Attendees: ${clientAttendees || 'Not specified'}
+
+${summaryToCopy}`;
+
+                try {
+                    await navigator.clipboard.writeText(meetingInfo);
+                    // Show temporary success message
+                    const originalText = document.querySelector('.copy-button').textContent;
+                    document.querySelector('.copy-button').textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        const button = document.querySelector('.copy-button');
+                        if (button) button.textContent = originalText;
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy: ', err);
+                    setAiError('Failed to copy to clipboard');
+                    setTimeout(() => setAiError(''), 3000);
+                }
+            };
+
+            const handleEditToggle = () => {
+                if (isEditingMode) {
+                    // Save changes
+                    setSummary(editableSummary);
+                }
+                setIsEditingMode(!isEditingMode);
             };
 
             const handleBrainQueryWithAI = async () => {
@@ -1142,39 +1243,150 @@ User Question: ${brainQuery}`;
                                                 🤖 Generated by AI
                                             </span>
                                         </h2>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                                onClick={handleEditToggle}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    backgroundColor: isEditingMode ? '#dc3545' : '#6c757d',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '12px',
+                                                    fontWeight: '500'
+                                                }}
+                                            >
+                                                {isEditingMode ? '❌ Cancel' : '✏️ Edit'}
+                                            </button>
+                                            {isEditingMode && (
+                                                <button
+                                                    onClick={handleEditToggle}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        backgroundColor: '#28a745',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '4px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '12px',
+                                                        fontWeight: '500'
+                                                    }}
+                                                >
+                                                    ✅ Save Changes
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Summary Content */}
+                                    {isEditingMode ? (
+                                        <textarea
+                                            value={editableSummary}
+                                            onChange={(e) => setEditableSummary(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                height: '500px',
+                                                padding: '16px',
+                                                border: '2px solid #6b7c4e',
+                                                borderRadius: '8px',
+                                                fontSize: '14px',
+                                                lineHeight: '1.6',
+                                                resize: 'vertical',
+                                                fontFamily: 'inherit',
+                                                backgroundColor: '#f8faf6'
+                                            }}
+                                            placeholder="Edit your meeting summary here..."
+                                        />
+                                    ) : (
+                                        <div 
+                                            style={{
+                                                padding: '16px',
+                                                backgroundColor: '#f8faf6',
+                                                borderRadius: '8px',
+                                                border: '1px solid #e5e7eb',
+                                                fontSize: '14px',
+                                                lineHeight: '1.6',
+                                                maxHeight: '600px',
+                                                overflowY: 'auto'
+                                            }}
+                                            className="markdown-content"
+                                            dangerouslySetInnerHTML={{
+                                                __html: renderMarkdown(summary)
+                                            }}
+                                        />
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    <div style={{
+                                        marginTop: '20px',
+                                        display: 'flex',
+                                        gap: '12px',
+                                        flexWrap: 'wrap',
+                                        borderTop: '1px solid #e5e7eb',
+                                        paddingTop: '20px'
+                                    }}>
                                         <button
                                             onClick={saveToBrain}
-                                            disabled={!summary.trim()}
+                                            disabled={!(isEditingMode ? editableSummary : summary).trim()}
                                             style={{
-                                                padding: '8px 16px',
-                                                backgroundColor: summary.trim() ? '#6b7c4e' : '#9ca3af',
+                                                padding: '12px 20px',
+                                                backgroundColor: (isEditingMode ? editableSummary : summary).trim() ? '#6b7c4e' : '#9ca3af',
                                                 color: 'white',
                                                 border: 'none',
-                                                borderRadius: '6px',
-                                                cursor: summary.trim() ? 'pointer' : 'not-allowed',
+                                                borderRadius: '8px',
+                                                cursor: (isEditingMode ? editableSummary : summary).trim() ? 'pointer' : 'not-allowed',
                                                 fontSize: '14px',
-                                                fontWeight: '500'
+                                                fontWeight: '600',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
                                             }}
                                         >
                                             🧠 Save to Brain
                                         </button>
+                                        
+                                        <button
+                                            onClick={exportSummary}
+                                            disabled={!(isEditingMode ? editableSummary : summary).trim()}
+                                            style={{
+                                                padding: '12px 20px',
+                                                backgroundColor: (isEditingMode ? editableSummary : summary).trim() ? '#17a2b8' : '#9ca3af',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: (isEditingMode ? editableSummary : summary).trim() ? 'pointer' : 'not-allowed',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                        >
+                                            📥 Export
+                                        </button>
+
+                                        <button
+                                            onClick={copySummary}
+                                            disabled={!(isEditingMode ? editableSummary : summary).trim()}
+                                            className="copy-button"
+                                            style={{
+                                                padding: '12px 20px',
+                                                backgroundColor: (isEditingMode ? editableSummary : summary).trim() ? '#28a745' : '#9ca3af',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: (isEditingMode ? editableSummary : summary).trim() ? 'pointer' : 'not-allowed',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                        >
+                                            📋 Copy
+                                        </button>
                                     </div>
-                                    <div 
-                                        style={{
-                                            padding: '16px',
-                                            backgroundColor: '#f8faf6',
-                                            borderRadius: '8px',
-                                            border: '1px solid #e5e7eb',
-                                            fontSize: '14px',
-                                            lineHeight: '1.6',
-                                            maxHeight: '600px',
-                                            overflowY: 'auto'
-                                        }}
-                                        className="markdown-content"
-                                        dangerouslySetInnerHTML={{
-                                            __html: renderMarkdown(summary)
-                                        }}
-                                    />
                                 </section>
                             )}
 
