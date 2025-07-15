@@ -243,32 +243,52 @@
             };
 
             const saveMeetingToDatabase = async (meetingRecord) => {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/meetings`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            id: meetingRecord.id,
-                            title: meetingRecord.title,
-                            meeting_date: meetingRecord.date,
-                            meeting_time: meetingRecord.time,
-                            venue: meetingRecord.venue,
-                            company_attendees: meetingRecord.companyAttendees,
-                            client_attendees: meetingRecord.clientAttendees,
-                            raw_notes: meetingRecord.rawNotes,
-                            summary: meetingRecord.summary,
-                            created_at: meetingRecord.createdAt
-                        })
-                    });
-                    if (response.ok) {
-                        return await response.json();
-                    } else {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                } catch (error) {
-                    throw error;
-                }
-            };
+    try {
+        console.log('=== SAVING TO DATABASE ===');
+        
+        // Format exactly like the working test
+        const payload = {
+            id: meetingRecord.id,
+            title: meetingRecord.title,
+            meeting_date: meetingRecord.date,
+            meeting_time: meetingRecord.time,
+            venue: meetingRecord.venue,
+            company_attendees: meetingRecord.companyAttendees,
+            client_attendees: meetingRecord.clientAttendees,
+            raw_notes: meetingRecord.rawNotes,
+            summary: meetingRecord.summary,
+            created_at: meetingRecord.createdAt
+        };
+        
+        console.log('Payload to send:', payload);
+        console.log('Summary length:', payload.summary.length);
+        console.log('Raw notes length:', payload.raw_notes.length);
+        
+        const response = await fetch(`${API_BASE_URL}/meetings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        console.log('Response status:', response.status);
+        
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        if (response.ok) {
+            const parsedResponse = JSON.parse(responseText);
+            console.log('✅ Save successful:', parsedResponse);
+            return parsedResponse;
+        } else {
+            console.error('❌ HTTP Error:', response.status);
+            console.error('Error response:', responseText);
+            throw new Error(`Database API returned ${response.status}: ${responseText}`);
+        }
+    } catch (error) {
+        console.error('❌ Save error:', error);
+        throw new Error(`Failed to save meeting: ${error.message}`);
+    }
+};
 
             const deleteMeetingFromDatabase = async (id) => {
                 try {
@@ -426,45 +446,77 @@ ${meetingContext.content}`;
             };
 
             const saveToBrain = async () => {
-                if (!summary.trim()) return;
-                setSaveError('');
-                
-                const meetingRecord = {
-                    id: Date.now(),
-                    date: meetingDate || new Date().toISOString().split('T')[0],
-                    time: meetingTime || '',
-                    venue: location || '',
-                    title: meetingTitle || 'Untitled Meeting',
-                    companyAttendees: companyAttendees || '',
-                    clientAttendees: clientAttendees || '',
-                    rawNotes: rawNotes,
-                    summary: summary,
-                    createdAt: new Date().toISOString()
-                };
-                
-                try {
-                    const savedMeeting = await saveMeetingToDatabase(meetingRecord);
-                    const appFormatMeeting = {
-                        id: savedMeeting.id,
-                        date: savedMeeting.meeting_date,
-                        time: savedMeeting.meeting_time,
-                        venue: savedMeeting.venue,
-                        title: savedMeeting.title,
-                        companyAttendees: savedMeeting.company_attendees,
-                        clientAttendees: savedMeeting.client_attendees,
-                        rawNotes: savedMeeting.raw_notes,
-                        summary: savedMeeting.summary,
-                        createdAt: savedMeeting.created_at
-                    };
-                    
-                    setStoredMeetings(prev => [appFormatMeeting, ...prev]);
-                    setShowSaveSuccess(true);
-                    setTimeout(() => setShowSaveSuccess(false), 3000);
-                } catch (error) {
-                    setSaveError('Failed to save meeting to database. Please try again.');
-                    setTimeout(() => setSaveError(''), 5000);
-                }
-            };
+    if (!summary.trim()) {
+        setAiError('No summary to save');
+        return;
+    }
+    
+    setSaveError('');
+    setAiError('');
+    
+    console.log('=== SAVE TO BRAIN CLICKED ===');
+    
+    // Create meeting record with safe defaults
+    const meetingRecord = {
+        id: Date.now(),
+        date: meetingDate || new Date().toISOString().split('T')[0],
+        time: meetingTime || '00:00',
+        venue: location || '',
+        title: meetingTitle || 'Untitled Meeting',
+        companyAttendees: companyAttendees || '',
+        clientAttendees: clientAttendees || '',
+        rawNotes: rawNotes || '',
+        summary: summary,
+        createdAt: new Date().toISOString()
+    };
+    
+    console.log('Meeting record prepared:', {
+        id: meetingRecord.id,
+        title: meetingRecord.title,
+        date: meetingRecord.date,
+        summaryLength: meetingRecord.summary.length,
+        rawNotesLength: meetingRecord.rawNotes.length
+    });
+    
+    try {
+        console.log('Calling saveMeetingToDatabase...');
+        const savedMeeting = await saveMeetingToDatabase(meetingRecord);
+        
+        console.log('✅ Database save completed');
+        
+        // Convert response to app format
+        const appFormatMeeting = {
+            id: savedMeeting.id,
+            date: savedMeeting.meeting_date,
+            time: savedMeeting.meeting_time,
+            venue: savedMeeting.venue,
+            title: savedMeeting.title,
+            companyAttendees: savedMeeting.company_attendees,
+            clientAttendees: savedMeeting.client_attendees,
+            rawNotes: savedMeeting.raw_notes,
+            summary: savedMeeting.summary,
+            createdAt: savedMeeting.created_at
+        };
+        
+        console.log('✅ Adding to stored meetings list');
+        setStoredMeetings(prev => [appFormatMeeting, ...prev]);
+        
+        console.log('✅ Showing success message');
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 3000);
+        
+    } catch (error) {
+        console.error('❌ Save to brain failed:', error);
+        setSaveError(`Failed to save: ${error.message}`);
+        setAiError(`Save error: ${error.message}`);
+        
+        // Clear error after 10 seconds
+        setTimeout(() => {
+            setSaveError('');
+            setAiError('');
+        }, 10000);
+    }
+};
 
             const deleteMeeting = async (id) => {
                 try {
