@@ -516,11 +516,57 @@
                 });
             };
 
+            const extractFromNotesWithAI = async () => {
+                if (!rawNotes.trim()) return;
+                
+                setIsExtracting(true);
+                setAiError('');
+                
+                try {
+                    const extractedData = await callAI('extract', rawNotes);
+                    
+                    console.log('AI Extraction Result from notes:', extractedData);
+                    
+                    if (extractedData && typeof extractedData === 'object') {
+                        if (extractedData.title && extractedData.title !== 'null') {
+                            setMeetingTitle(extractedData.title);
+                        }
+                        if (extractedData.date && extractedData.date !== 'null') {
+                            setMeetingDate(extractedData.date);
+                        }
+                        if (extractedData.time && extractedData.time !== 'null') {
+                            setMeetingTime(extractedData.time);
+                        }
+                        if (extractedData.location && extractedData.location !== 'null') {
+                            setLocation(extractedData.location);
+                        }
+                        if (extractedData.attendees && extractedData.attendees !== 'null') {
+                            setCompanyAttendees(extractedData.attendees);
+                        }
+                        if (extractedData.client && extractedData.client !== 'null') {
+                            setClient(extractedData.client);
+                        }
+                        if (extractedData.project && extractedData.project !== 'null') {
+                            setProject(extractedData.project);
+                        }
+                    }
+                    
+                } catch (aiError) {
+                    console.error('AI extraction from notes failed:', aiError);
+                    setAiError(`AI extraction failed: ${aiError.message}. You can still fill in the details manually.`);
+                } finally {
+                    setIsExtracting(false);
+                }
+            };
+
+            const handleEditCancel = () => {
+                setEditableSummary(summary);
+                setIsEditingMode(false);
+            };
+
             const refreshPage = () => {
                 window.location.reload();
             };
-
-            const generateSummaryWithAI = async () => {
                 if (!rawNotes.trim()) return;
                 
                 setIsGenerating(true);
