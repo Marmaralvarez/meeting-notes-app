@@ -152,11 +152,49 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Enhanced markdown renderer with table fix
+        // Enhanced markdown renderer with proper table handling
         const renderMarkdown = (text) => {
             if (!text) return '';
             
-            let processed = text
+            let processed = text;
+            
+            // Handle tables first (before line breaks)
+            const lines = processed.split('\n');
+            let inTable = false;
+            let tableLines = [];
+            let result = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Check if this is a table row (starts and ends with |)
+                if (line.startsWith('|') && line.endsWith('|')) {
+                    if (!inTable) {
+                        inTable = true;
+                        tableLines = [];
+                    }
+                    tableLines.push(line);
+                } else {
+                    // If we were in a table, process it
+                    if (inTable) {
+                        result.push(processTable(tableLines));
+                        inTable = false;
+                        tableLines = [];
+                    }
+                    // Add the current line
+                    result.push(line);
+                }
+            }
+            
+            // Handle any remaining table
+            if (inTable && tableLines.length > 0) {
+                result.push(processTable(tableLines));
+            }
+            
+            processed = result.join('\n');
+            
+            // Now apply other markdown formatting
+            processed = processed
                 // Headers
                 .replace(/^# (.*$)/gim, '<h1>$1</h1>')
                 .replace(/^## (.*$)/gim, '<h2>$1</h2>')
@@ -167,67 +205,59 @@
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>')
                 
-                // Line breaks first (before table processing)
-                .replace(/\n/g, '<br>');
-            
-            // Handle tables separately to avoid conflicts with <br> tags
-            const tableRegex = /(\|[^|]+\|(?:<br>\|[^|]+\|)*)/g;
-            processed = processed.replace(tableRegex, (match) => {
-                // Remove <br> tags within table matches for processing
-                const tableContent = match.replace(/<br>/g, '\n');
-                const lines = tableContent.split('\n').filter(line => line.trim());
-                
-                if (lines.length < 2) return match;
-                
-                const tableRows = lines.map(line => {
-                    const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
-                    return cells;
-                }).filter(row => row.length > 0);
-                
-                if (tableRows.length === 0) return match;
-                
-                // Skip separator rows (rows with only dashes)
-                const dataRows = tableRows.filter(row => 
-                    !row.every(cell => /^[-\s]*$/.test(cell))
-                );
-                
-                if (dataRows.length === 0) return match;
-                
-                // First row as header
-                const headerRow = dataRows[0];
-                const bodyRows = dataRows.slice(1);
-                
-                let tableHtml = '<table>';
-                
-                // Header
-                tableHtml += '<tr>';
-                headerRow.forEach(cell => {
-                    tableHtml += `<th>${cell}</th>`;
-                });
-                tableHtml += '</tr>';
-                
-                // Body rows
-                bodyRows.forEach(row => {
-                    tableHtml += '<tr>';
-                    row.forEach(cell => {
-                        tableHtml += `<td>${cell}</td>`;
-                    });
-                    tableHtml += '</tr>';
-                });
-                
-                tableHtml += '</table>';
-                return tableHtml;
-            });
-            
-            // Lists (after table processing)
-            processed = processed
+                // Lists
                 .replace(/^[-*] (.*$)/gim, '<li>$1</li>')
                 .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
                 
                 // Wrap consecutive list items
-                .replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>');
+                .replace(/(<li>.*?<\/li>(?:\s*<li>.*?<\/li>)*)/gs, '<ul>$1</ul>')
+                
+                // Line breaks
+                .replace(/\n/g, '<br>');
             
             return processed;
+        };
+        
+        const processTable = (tableLines) => {
+            if (tableLines.length === 0) return '';
+            
+            // Filter out separator lines (lines with only dashes, spaces, and pipes)
+            const contentLines = tableLines.filter(line => 
+                !line.match(/^\|[\s\-\|]*\|$/)
+            );
+            
+            if (contentLines.length === 0) return '';
+            
+            const rows = contentLines.map(line => {
+                // Remove leading and trailing pipes, then split by pipes
+                const cells = line.slice(1, -1).split('|').map(cell => cell.trim());
+                return cells;
+            });
+            
+            if (rows.length === 0) return '';
+            
+            let tableHtml = '<table>';
+            
+            // First row as header
+            const headerRow = rows[0];
+            tableHtml += '<tr>';
+            headerRow.forEach(cell => {
+                tableHtml += `<th>${cell}</th>`;
+            });
+            tableHtml += '</tr>';
+            
+            // Remaining rows as data
+            const dataRows = rows.slice(1);
+            dataRows.forEach(row => {
+                tableHtml += '<tr>';
+                row.forEach(cell => {
+                    tableHtml += `<td>${cell}</td>`;
+                });
+                tableHtml += '</tr>';
+            });
+            
+            tableHtml += '</table>';
+            return tableHtml;
         };
 
         function MeetingNotesApp() {
@@ -497,6 +527,13 @@
                 setAiError('');
                 
                 try {
+                    // First, extract meeting details if fields are mostly empty
+                    const fieldsEmpty = !meetingTitle && !meetingDate && !client && !project;
+                    if (fieldsEmpty) {
+                        console.log('Fields mostly empty, extracting details first...');
+                        await extractFromNotesWithAI();
+                    }
+                    
                     const meetingContext = {
                         title: meetingTitle || 'Meeting',
                         date: meetingDate,
@@ -949,6 +986,11 @@ User Question: ${brainQuery}`;
                                     color: '#374528'
                                 }}>
                                     📝 Meeting Notes
+                                    {isExtracting && (
+                                        <span className="ai-indicator processing">
+                                            🤖 AI Extracting Details...
+                                        </span>
+                                    )}
                                 </h2>
                                 <textarea
                                     value={rawNotes}
@@ -966,6 +1008,34 @@ User Question: ${brainQuery}`;
                                         fontFamily: 'inherit'
                                     }}
                                 />
+                                
+                                {/* Extract Details Button */}
+                                {rawNotes.trim() && !files.length && (
+                                    <button
+                                        onClick={extractFromNotesWithAI}
+                                        disabled={isExtracting}
+                                        style={{
+                                            marginTop: '12px',
+                                            padding: '8px 16px',
+                                            backgroundColor: isExtracting ? '#9ca3af' : '#6b7c4e',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            cursor: isExtracting ? 'not-allowed' : 'pointer',
+                                            fontSize: '13px',
+                                            fontWeight: '500',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px'
+                                        }}
+                                    >
+                                        {isExtracting ? (
+                                            <>🤖 Extracting Details...</>
+                                        ) : (
+                                            <>🔍 Extract Meeting Details</>
+                                        )}
+                                    </button>
+                                )}
                             </section>
                         </div>
 
@@ -1397,6 +1467,44 @@ User Question: ${brainQuery}`;
                                             }}
                                         >
                                             📋 Copy
+                                        </button>
+
+                                        <button
+                                            onClick={refreshPage}
+                                            style={{
+                                                padding: '12px 20px',
+                                                backgroundColor: '#dc3545',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                        >
+                                            🔄 Cancel & Refresh
+                                        </button>
+
+                                        <button
+                                            onClick={refreshPage}
+                                            style={{
+                                                padding: '12px 20px',
+                                                backgroundColor: '#dc3545',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                fontSize: '14px',
+                                                fontWeight: '500',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}
+                                        >
+                                            🔄 Cancel & Refresh
                                         </button>
                                     </div>
                                 </section>
