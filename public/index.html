@@ -559,14 +559,7 @@
                 }
             };
 
-            const handleEditCancel = () => {
-                setEditableSummary(summary);
-                setIsEditingMode(false);
-            };
-
-            const refreshPage = () => {
-                window.location.reload();
-            };
+            const generateSummaryWithAI = async () => {
                 if (!rawNotes.trim()) return;
                 
                 setIsGenerating(true);
@@ -615,6 +608,10 @@ ${meetingContext.content}`;
                 } finally {
                     setIsGenerating(false);
                 }
+            };
+
+            const refreshPage = () => {
+                window.location.reload();
             };
 
             const saveToBrain = async () => {
@@ -767,6 +764,11 @@ ${summaryToCopy}`;
                     setSummary(editableSummary);
                 }
                 setIsEditingMode(!isEditingMode);
+            };
+
+            const handleEditCancel = () => {
+                setEditableSummary(summary);
+                setIsEditingMode(false);
             };
 
             const handleBrainQueryWithAI = async () => {
@@ -1533,25 +1535,6 @@ User Question: ${brainQuery}`;
                                         >
                                             🔄 Cancel & Refresh
                                         </button>
-
-                                        <button
-                                            onClick={refreshPage}
-                                            style={{
-                                                padding: '12px 20px',
-                                                backgroundColor: '#dc3545',
-                                                color: 'white',
-                                                border: 'none',
-                                                borderRadius: '8px',
-                                                cursor: 'pointer',
-                                                fontSize: '14px',
-                                                fontWeight: '500',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '8px'
-                                            }}
-                                        >
-                                            🔄 Cancel & Refresh
-                                        </button>
                                     </div>
                                 </section>
                             )}
@@ -1617,212 +1600,212 @@ User Question: ${brainQuery}`;
                                                     borderRadius: '6px',
                                                     cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
                                                     fontSize: '14px',
-                                                    fontWeight: '500'
-                                                }}
-                                            >
-                                                {isBrainLoading ? '🤖' : '🔍'}
-                                            </button>
-                                        </div>
-                                        
-                                        {/* Quick query suggestions */}
-                                        {storedMeetings.length > 0 && (
-                                            <div style={{ marginTop: '8px' }}>
-                                                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                                                    Quick questions:
-                                                </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                    {[
-                                                        'What action items were discussed?',
-                                                        'Which clients are we working with?',
-                                                        'What projects are active?',
-                                                        'Who attended recent meetings?',
-                                                        'What decisions were made?',
-                                                        'What are the next steps?'
-                                                    ].map((suggestion, index) => (
-                                                        <button
-                                                            key={index}
-                                                            onClick={() => setBrainQuery(suggestion)}
-                                                            style={{
-                                                                padding: '4px 8px',
-                                                                fontSize: '11px',
-                                                                backgroundColor: '#f3f4f6',
-                                                                border: '1px solid #e5e7eb',
-                                                                borderRadius: '4px',
-                                                                cursor: 'pointer',
-                                                                color: '#374528'
-                                                            }}
-                                                        >
-                                                            {suggestion}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                                   fontWeight: '500'
+                                               }}
+                                           >
+                                               {isBrainLoading ? '🤖' : '🔍'}
+                                           </button>
+                                       </div>
+                                       
+                                       {/* Quick query suggestions */}
+                                       {storedMeetings.length > 0 && (
+                                           <div style={{ marginTop: '8px' }}>
+                                               <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                                                   Quick questions:
+                                               </div>
+                                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                   {[
+                                                       'What action items were discussed?',
+                                                       'Which clients are we working with?',
+                                                       'What projects are active?',
+                                                       'Who attended recent meetings?',
+                                                       'What decisions were made?',
+                                                       'What are the next steps?'
+                                                   ].map((suggestion, index) => (
+                                                       <button
+                                                           key={index}
+                                                           onClick={() => setBrainQuery(suggestion)}
+                                                           style={{
+                                                               padding: '4px 8px',
+                                                               fontSize: '11px',
+                                                               backgroundColor: '#f3f4f6',
+                                                               border: '1px solid #e5e7eb',
+                                                               borderRadius: '4px',
+                                                               cursor: 'pointer',
+                                                               color: '#374528'
+                                                           }}
+                                                       >
+                                                           {suggestion}
+                                                       </button>
+                                                   ))}
+                                               </div>
+                                           </div>
+                                       )}
+                                   </div>
 
-                                    {/* Response Section */}
-                                    {brainResponse && (
-                                        <div style={{
-                                            padding: '12px',
-                                            backgroundColor: '#f8faf6',
-                                            borderRadius: '8px',
-                                            marginBottom: '20px',
-                                            border: '1px solid #e5e7eb'
-                                        }}>
-                                            <h4 style={{
-                                                fontSize: '14px',
-                                                fontWeight: '600',
-                                                marginBottom: '8px',
-                                                color: '#374528',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px'
-                                            }}>
-                                                🤖 AI Response:
-                                            </h4>
-                                            <div 
-                                                style={{
-                                                    fontSize: '14px',
-                                                    lineHeight: '1.5'
-                                                }}
-                                                className="markdown-content"
-                                                dangerouslySetInnerHTML={{
-                                                    __html: renderMarkdown(brainResponse)
-                                                }}
-                                            />
-                                        </div>
-                                    )}
+                                   {/* Response Section */}
+                                   {brainResponse && (
+                                       <div style={{
+                                           padding: '12px',
+                                           backgroundColor: '#f8faf6',
+                                           borderRadius: '8px',
+                                           marginBottom: '20px',
+                                           border: '1px solid #e5e7eb'
+                                       }}>
+                                           <h4 style={{
+                                               fontSize: '14px',
+                                               fontWeight: '600',
+                                               marginBottom: '8px',
+                                               color: '#374528',
+                                               display: 'flex',
+                                               alignItems: 'center',
+                                               gap: '4px'
+                                           }}>
+                                               🤖 AI Response:
+                                           </h4>
+                                           <div 
+                                               style={{
+                                                   fontSize: '14px',
+                                                   lineHeight: '1.5'
+                                               }}
+                                               className="markdown-content"
+                                               dangerouslySetInnerHTML={{
+                                                   __html: renderMarkdown(brainResponse)
+                                               }}
+                                           />
+                                       </div>
+                                   )}
 
-                                    {isBrainLoading && (
-                                        <div style={{
-                                            padding: '20px',
-                                            textAlign: 'center',
-                                            color: '#6b7280',
-                                            backgroundColor: '#f8faf6',
-                                            borderRadius: '8px',
-                                            marginBottom: '20px'
-                                        }}>
-                                            🤖 AI is analyzing your meetings...
-                                        </div>
-                                    )}
+                                   {isBrainLoading && (
+                                       <div style={{
+                                           padding: '20px',
+                                           textAlign: 'center',
+                                           color: '#6b7280',
+                                           backgroundColor: '#f8faf6',
+                                           borderRadius: '8px',
+                                           marginBottom: '20px'
+                                       }}>
+                                           🤖 AI is analyzing your meetings...
+                                       </div>
+                                   )}
 
-                                    {/* Stored Meetings List */}
-                                    <div>
-                                        <h3 style={{
-                                            fontSize: '16px',
-                                            fontWeight: '600',
-                                            marginBottom: '12px',
-                                            color: '#374528'
-                                        }}>
-                                            Stored Meetings ({storedMeetings.length})
-                                        </h3>
-                                        
-                                        {isLoadingMeetings ? (
-                                            <div style={{ textAlign: 'center', padding: '20px' }}>
-                                                <div>🔄 Loading meetings...</div>
-                                            </div>
-                                        ) : storedMeetings.length === 0 ? (
-                                            <div style={{
-                                                textAlign: 'center',
-                                                padding: '20px',
-                                                color: '#6b7280',
-                                                fontSize: '14px'
-                                            }}>
-                                                No meetings stored yet. Generate and save an AI summary to get started!
-                                            </div>
-                                        ) : (
-                                            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                                {storedMeetings.map((meeting) => (
-                                                    <div key={meeting.id} style={{
-                                                        padding: '12px',
-                                                        backgroundColor: '#f8faf6',
-                                                        borderRadius: '8px',
-                                                        marginBottom: '8px',
-                                                        border: '1px solid #e5e7eb'
-                                                    }}>
-                                                        <div style={{
-                                                            display: 'flex',
-                                                            justifyContent: 'space-between',
-                                                            alignItems: 'flex-start',
-                                                            marginBottom: '8px'
-                                                        }}>
-                                                            <div>
-                                                                <h4 style={{
-                                                                    fontSize: '14px',
-                                                                    fontWeight: '600',
-                                                                    margin: '0 0 4px 0',
-                                                                    color: '#374528'
-                                                                }}>
-                                                                    {meeting.title}
-                                                                </h4>
-                                                                <div style={{
-                                                                    fontSize: '12px',
-                                                                    color: '#6b7280'
-                                                                }}>
-                                                                    📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
-                                                                    {meeting.venue && ` • 📍 ${meeting.venue}`}
-                                                                </div>
-                                                                {(meeting.client || meeting.project) && (
-                                                                    <div style={{
-                                                                        fontSize: '12px',
-                                                                        color: '#6b7280',
-                                                                        marginTop: '2px'
-                                                                    }}>
-                                                                        {meeting.client && `🏢 ${meeting.client}`}
-                                                                        {meeting.client && meeting.project && ' • '}
-                                                                        {meeting.project && `📁 ${meeting.project}`}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <button
-                                                                onClick={() => deleteMeeting(meeting.id)}
-                                                                style={{
-                                                                    background: 'none',
-                                                                    border: 'none',
-                                                                    color: '#dc3545',
-                                                                    cursor: 'pointer',
-                                                                    fontSize: '14px',
-                                                                    padding: '4px'
-                                                                }}
-                                                                title="Delete meeting"
-                                                            >
-                                                                🗑️
-                                                            </button>
-                                                        </div>
-                                                        {(meeting.companyAttendees || meeting.clientAttendees) && (
-                                                            <div style={{
-                                                                fontSize: '12px',
-                                                                color: '#6b7280',
-                                                                marginBottom: '8px'
-                                                            }}>
-                                                                {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
-                                                                {meeting.companyAttendees && meeting.clientAttendees && ' • '}
-                                                                {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
-                                                            </div>
-                                                        )}
-                                                        <div style={{
-                                                            fontSize: '12px',
-                                                            color: '#374528',
-                                                            maxHeight: '60px',
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis'
-                                                        }}>
-                                                            {meeting.summary.substring(0, 150)}...
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </main>
-                </div>
-            );
-        }
+                                   {/* Stored Meetings List */}
+                                   <div>
+                                       <h3 style={{
+                                           fontSize: '16px',
+                                           fontWeight: '600',
+                                           marginBottom: '12px',
+                                           color: '#374528'
+                                       }}>
+                                           Stored Meetings ({storedMeetings.length})
+                                       </h3>
+                                       
+                                       {isLoadingMeetings ? (
+                                           <div style={{ textAlign: 'center', padding: '20px' }}>
+                                               <div>🔄 Loading meetings...</div>
+                                           </div>
+                                       ) : storedMeetings.length === 0 ? (
+                                           <div style={{
+                                               textAlign: 'center',
+                                               padding: '20px',
+                                               color: '#6b7280',
+                                               fontSize: '14px'
+                                           }}>
+                                               No meetings stored yet. Generate and save an AI summary to get started!
+                                           </div>
+                                       ) : (
+                                           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                               {storedMeetings.map((meeting) => (
+                                                   <div key={meeting.id} style={{
+                                                       padding: '12px',
+                                                       backgroundColor: '#f8faf6',
+                                                       borderRadius: '8px',
+                                                       marginBottom: '8px',
+                                                       border: '1px solid #e5e7eb'
+                                                   }}>
+                                                       <div style={{
+                                                           display: 'flex',
+                                                           justifyContent: 'space-between',
+                                                           alignItems: 'flex-start',
+                                                           marginBottom: '8px'
+                                                       }}>
+                                                           <div>
+                                                               <h4 style={{
+                                                                   fontSize: '14px',
+                                                                   fontWeight: '600',
+                                                                   margin: '0 0 4px 0',
+                                                                   color: '#374528'
+                                                               }}>
+                                                                   {meeting.title}
+                                                               </h4>
+                                                               <div style={{
+                                                                   fontSize: '12px',
+                                                                   color: '#6b7280'
+                                                               }}>
+                                                                   📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
+                                                                   {meeting.venue && ` • 📍 ${meeting.venue}`}
+                                                               </div>
+                                                               {(meeting.client || meeting.project) && (
+                                                                   <div style={{
+                                                                       fontSize: '12px',
+                                                                       color: '#6b7280',
+                                                                       marginTop: '2px'
+                                                                   }}>
+                                                                       {meeting.client && `🏢 ${meeting.client}`}
+                                                                       {meeting.client && meeting.project && ' • '}
+                                                                       {meeting.project && `📁 ${meeting.project}`}
+                                                                   </div>
+                                                               )}
+                                                           </div>
+                                                           <button
+                                                               onClick={() => deleteMeeting(meeting.id)}
+                                                               style={{
+                                                                   background: 'none',
+                                                                   border: 'none',
+                                                                   color: '#dc3545',
+                                                                   cursor: 'pointer',
+                                                                   fontSize: '14px',
+                                                                   padding: '4px'
+                                                               }}
+                                                               title="Delete meeting"
+                                                           >
+                                                               🗑️
+                                                           </button>
+                                                       </div>
+                                                       {(meeting.companyAttendees || meeting.clientAttendees) && (
+                                                           <div style={{
+                                                               fontSize: '12px',
+                                                               color: '#6b7280',
+                                                               marginBottom: '8px'
+                                                           }}>
+                                                               {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
+                                                               {meeting.companyAttendees && meeting.clientAttendees && ' • '}
+                                                               {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
+                                                           </div>
+                                                       )}
+                                                       <div style={{
+                                                           fontSize: '12px',
+                                                           color: '#374528',
+                                                           maxHeight: '60px',
+                                                           overflow: 'hidden',
+                                                           textOverflow: 'ellipsis'
+                                                       }}>
+                                                           {meeting.summary.substring(0, 150)}...
+                                                       </div>
+                                                   </div>
+                                               ))}
+                                           </div>
+                                       )}
+                                   </div>
+                               </div>
+                           )}
+                       </div>
+                   </main>
+               </div>
+           );
+       }
 
-        ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
-    </script>
+       ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
+   </script>
 </body>
 </html>
