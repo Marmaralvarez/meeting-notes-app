@@ -366,9 +366,19 @@
             }, []);
 
             const loadMeetingsFromDatabase = async () => {
-                setIsLoadingMeetings(true);
-                try {
-                    const response = await fetch(`${API_BASE_URL}/meetings`);
+    setIsLoadingMeetings(true);
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            window.location.href = '/login.html';
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/meetings`, {
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`
+            }
+        });
                     if (response.ok) {
                         const meetings = await response.json();
                         const appFormatMeetings = meetings.map(meeting => ({
@@ -383,7 +393,8 @@
                             project: meeting.project || '', // New field
                             rawNotes: meeting.raw_notes,
                             summary: meeting.summary,
-                            createdAt: meeting.created_at
+                            createdAt: meeting.created_at,
+                            createdBy: meeting.created_by
                         }));
                         setStoredMeetings(appFormatMeetings);
                     }
@@ -809,7 +820,8 @@ ${meetingContext.content}`;
                         project: savedMeeting.project || '', // New field
                         rawNotes: savedMeeting.raw_notes,
                         summary: savedMeeting.summary,
-                        createdAt: savedMeeting.created_at
+                        createdAt: savedMeeting.created_at,
+                        createdBy: savedMeeting.created_by || currentUserEmail
                     };
                     
                     console.log('✅ Adding to stored meetings list');
@@ -908,58 +920,28 @@ ${summaryToCopy}`;
                 setIsEditingMode(false);
             };
 
-            const handleBrainQueryWithAI = async () => {
-                if (!brainQuery.trim() || storedMeetings.length === 0) return;
-
-                setIsBrainLoading(true);
-                setBrainResponse('');
-
-                try {
-                    const response = await fetch(`${API_BASE_URL}/meetings`);
-                    let meetingsForQuery = storedMeetings;
+            const handleFileUpload = (event) => {
+                const uploadedFiles = Array.from(event.target.files);
+    
+                const txtFiles = uploadedFiles.filter(file => 
+                    file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain'
+                );
+    
+                const rejectedFiles = uploadedFiles.filter(file => 
+                    !file.name.toLowerCase().endsWith('.txt') && file.type !== 'text/plain'
+                );
+    
+                if (rejectedFiles.length > 0) {
+                    setAiError(`⚠️ Only .txt files are supported. Rejected ${rejectedFiles.length} file(s): ${rejectedFiles.map(f => f.name).join(', ')}`);
+                    setTimeout(() => setAiError(''), 8000);
+                }
+                
+                if (txtFiles.length > 0) {
+                    setFiles(prev => [...prev, ...txtFiles]);
                     
-                    if (response.ok) {
-                        const latestMeetings = await response.json();
-                        meetingsForQuery = latestMeetings.map(meeting => ({
-                            id: meeting.id,
-                            date: meeting.meeting_date,
-                            time: meeting.meeting_time,
-                            venue: meeting.venue,
-                            title: meeting.title,
-                            companyAttendees: meeting.company_attendees,
-                            clientAttendees: meeting.client_attendees,
-                            client: meeting.client || '', // New field
-                            project: meeting.project || '', // New field
-                            rawNotes: meeting.raw_notes,
-                            summary: meeting.summary,
-                            createdAt: meeting.created_at
-                        }));
-                    }
-
-                    const meetingData = meetingsForQuery.map(meeting => 
-                        `Meeting: ${meeting.title} (${meeting.date})
-Location: ${meeting.venue || 'Not specified'}
-Client: ${meeting.client || 'Not specified'}
-Project: ${meeting.project || 'Not specified'}
-Attendees: ${meeting.companyAttendees || ''} ${meeting.clientAttendees || ''}
-Summary: ${meeting.summary}
----`
-                    ).join('\n\n');
-
-                    const queryContext = `You have access to ${meetingsForQuery.length} stored meetings. Here's the data:
-
-${meetingData}
-
-User Question: ${brainQuery}`;
-
-                    const aiResponse = await callAI('query', queryContext);
-                    setBrainResponse(aiResponse);
-                    
-                } catch (error) {
-                    console.error('Brain query failed:', error);
-                    setBrainResponse(`Sorry, I couldn't process your query: ${error.message}. Please try again with a different question.`);
-                } finally {
-                    setIsBrainLoading(false);
+                    setTimeout(() => {
+                        extractFromFilesWithAI(txtFiles);
+                    }, 100);
                 }
             };
 
@@ -1057,8 +1039,10 @@ User Question: ${brainQuery}`;
                                     >
                                         Logout
                                     </button>
+                                    </div>
                                 </div>
                             </div>
+                       </div>             
                     </header>
 
                     <main style={{
@@ -1459,6 +1443,13 @@ User Question: ${brainQuery}`;
                                             fontSize: '14px'
                                         }}
                                     />
+                                    <div style={{
+                                        fontSize: '12px',
+                                        color: '#6b7280',
+                                        marginTop: '4px'
+                                    }}>
+                                        💡 Enter attendees as "Email" or "Name Surname", separated by commas
+                                    </div>
                                 </div>
                                 
                                 <div>
@@ -1484,7 +1475,14 @@ User Question: ${brainQuery}`;
                                             fontSize: '14px'
                                         }}
                                     />
-                                </div>
+
+                                        <div style={{
+                                            fontSize: '12px',
+                                            color: '#6b7280',
+                                            marginTop: '4px'
+                                        }}>
+                                            💡 Enter attendees as "Email" or "Name Surname", separated by commas
+                                        </div>  
                             </div>
                             
                             <button
@@ -1931,7 +1929,7 @@ User Question: ${brainQuery}`;
                                                                    </div>
                                                                )}
                                                            </div>
-                                                           <button
+                                                          
                                                             {meeting.createdBy === currentUserEmail ? (
                                                                 <button
                                                                     onClick={() => deleteMeeting(meeting.id)}
@@ -1959,13 +1957,11 @@ User Question: ${brainQuery}`;
                                                             )}
                                                        </div>
                                                        {(meeting.companyAttendees || meeting.clientAttendees) && (
-                                                           <<div style={{
-                                                                 fontSize: '12px',
+                                                            <div style={{
+                                                                fontSize: '12px',
                                                                 color: '#6b7280',
-                                                                marginTop: '4px'
+                                                                marginBottom: '8px'
                                                             }}>
-                                                                💡 Enter attendees as "Email" or "Name Surname", separated by commas
-                                                            </div>  
                                                                {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
                                                                {meeting.companyAttendees && meeting.clientAttendees && ' • '}
                                                                {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
