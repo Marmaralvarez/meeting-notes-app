@@ -7,6 +7,7 @@
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -151,6 +152,13 @@
     
     <script type="text/babel">
         const { useState, useEffect } = React;
+        // Supabase initialization
+            const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced with env variable
+            const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced with env variable
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // Auth state
+            let currentUserEmail = null;
 
         // Enhanced markdown renderer with proper table handling
         const renderMarkdown = (text) => {
@@ -278,6 +286,67 @@
             const [client, setClient] = useState(''); // New field
             const [project, setProject] = useState(''); // New field
             const [aiError, setAiError] = useState('');
+            const [userEmail, setUserEmail] = useState('');
+            const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+                // Check authentication on component mount
+                useEffect(() => {
+                    checkAuth();
+                    
+                    // Set up auth state listener
+                    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+                        if (event === 'SIGNED_OUT') {
+                            window.location.href = '/login.html';
+                        }
+                    });
+                    
+                    return () => {
+                        authListener.subscription.unsubscribe();
+                    };
+                }, []);
+
+                const checkAuth = async () => {
+                    try {
+                        const { data: { session } } = await supabase.auth.getSession();
+                        
+                        if (!session) {
+                            window.location.href = '/login.html';
+                            return;
+                        }
+                        
+                        currentUserEmail = session.user.email;
+                        setUserEmail(session.user.email);
+                        setIsCheckingAuth(false);
+                    } catch (error) {
+                        console.error('Auth check failed:', error);
+                        window.location.href = '/login.html';
+                    }
+                };
+
+                const handleLogout = async () => {
+                    try {
+                        await supabase.auth.signOut();
+                        window.location.href = '/login.html';
+                    } catch (error) {
+                        console.error('Logout failed:', error);
+                    }
+                };
+
+                // Add loading state at the beginning of the component return
+                if (isCheckingAuth) {
+                    return (
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100vh',
+                            fontSize: '18px',
+                            color: '#6b7280'
+                        }}>
+                            Checking authentication...
+                        </div>
+                    );
+                }
 
             // Brain functionality
             const [storedMeetings, setStoredMeetings] = useState([]);
@@ -326,121 +395,189 @@
             };
 
             const saveMeetingToDatabase = async (meetingRecord) => {
-                try {
-                    console.log('=== SAVING TO DATABASE ===');
-                    
-                    // Format exactly like the working test with new fields
-                    const payload = {
-                        id: meetingRecord.id,
-                        title: meetingRecord.title,
-                        meeting_date: meetingRecord.date,
-                        meeting_time: meetingRecord.time,
-                        venue: meetingRecord.venue,
-                        company_attendees: meetingRecord.companyAttendees,
-                        client_attendees: meetingRecord.clientAttendees,
-                        client: meetingRecord.client, // New field
-                        project: meetingRecord.project, // New field
-                        raw_notes: meetingRecord.rawNotes,
-                        summary: meetingRecord.summary,
-                        created_at: meetingRecord.createdAt
-                    };
-                    
-                    console.log('Payload to send:', payload);
-                    console.log('Summary length:', payload.summary.length);
-                    console.log('Raw notes length:', payload.raw_notes.length);
-                    
-                    const response = await fetch(`${API_BASE_URL}/meetings`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    console.log('Response status:', response.status);
-                    
-                    const responseText = await response.text();
-                    console.log('Response text:', responseText);
-                    
-                    if (response.ok) {
-                        const parsedResponse = JSON.parse(responseText);
-                        console.log('✅ Save successful:', parsedResponse);
-                        return parsedResponse;
-                    } else {
-                        console.error('❌ HTTP Error:', response.status);
-                        console.error('Error response:', responseText);
-                        throw new Error(`Database API returned ${response.status}: ${responseText}`);
-                    }
-                } catch (error) {
-                    console.error('❌ Save error:', error);
-                    throw new Error(`Failed to save meeting: ${error.message}`);
-                }
-            };
+    try {
+        console.log('=== SAVING TO DATABASE ===');
+        
+        // Get the current session for auth header
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            throw new Error('Not authenticated');
+        }
+        
+        // Format exactly like the working test with new fields
+        const payload = {
+            id: meetingRecord.id,
+            title: meetingRecord.title,
+            meeting_date: meetingRecord.date,
+            meeting_time: meetingRecord.time,
+            venue: meetingRecord.venue,
+            company_attendees: meetingRecord.companyAttendees,
+            client_attendees: meetingRecord.clientAttendees,
+            client: meetingRecord.client,
+            project: meetingRecord.project,
+            raw_notes: meetingRecord.rawNotes,
+            summary: meetingRecord.summary,
+            created_at: meetingRecord.createdAt
+        };
+        
+        console.log('Payload to send:', payload);
+        console.log('Summary length:', payload.summary.length);
+        console.log('Raw notes length:', payload.raw_notes.length);
+        
+        const response = await fetch(`${API_BASE_URL}/meetings`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`  // Added auth header
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        console.log('Response status:', response.status);
+        
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        
+        if (response.ok) {
+            const parsedResponse = JSON.parse(responseText);
+            console.log('✅ Save successful:', parsedResponse);
+            return parsedResponse;
+        } else {
+            console.error('❌ HTTP Error:', response.status);
+            console.error('Error response:', responseText);
+            throw new Error(`Database API returned ${response.status}: ${responseText}`);
+        }
+    } catch (error) {
+        console.error('❌ Save error:', error);
+        throw new Error(`Failed to save meeting: ${error.message}`);
+    }
+};
 
             const deleteMeetingFromDatabase = async (id) => {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/meetings?id=${id}`, {
-                        method: 'DELETE',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                } catch (error) {
-                    throw error;
-                }
-            };
+    try {
+        // Get the current session for auth header
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            throw new Error('Not authenticated');
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/meetings?id=${id}`, {
+            method: 'DELETE',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`  // Added auth header
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        throw error;
+    }
+};
 
             const callAI = async (type, content, prompt = '') => {
-                try {
-                    console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
-                    const response = await fetch(`${API_BASE_URL}/ai`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type,
-                            content,
-                            prompt
-                        })
-                    });
+    try {
+        // Get the current session for auth header
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            throw new Error('Not authenticated');
+        }
+        
+        console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
+        const response = await fetch(`${API_BASE_URL}/ai`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`  // Added auth header
+            },
+            body: JSON.stringify({
+                type,
+                content,
+                prompt
+            })
+        });
 
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || `HTTP ${response.status}`);
-                    }
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
 
-                    const data = await response.json();
-                    console.log(`AI response for ${type}:`, data.result);
-                    return data.result;
-                } catch (error) {
-                    console.error('AI API Error:', error);
-                    throw error;
-                }
-            };
+        const data = await response.json();
+        console.log(`AI response for ${type}:`, data.result);
+        return data.result;
+    } catch (error) {
+        console.error('AI API Error:', error);
+        throw error;
+    }
+};
 
-            const handleFileUpload = (event) => {
-                const uploadedFiles = Array.from(event.target.files);
-                
-                // Filter for .txt files only
-                const txtFiles = uploadedFiles.filter(file => 
-                    file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain'
-                );
-                
-                const rejectedFiles = uploadedFiles.filter(file => 
-                    !file.name.toLowerCase().endsWith('.txt') && file.type !== 'text/plain'
-                );
-                
-                if (rejectedFiles.length > 0) {
-                    setAiError(`⚠️ Only .txt files are supported. Rejected ${rejectedFiles.length} file(s): ${rejectedFiles.map(f => f.name).join(', ')}`);
-                    setTimeout(() => setAiError(''), 8000);
-                }
-                
-                if (txtFiles.length > 0) {
-                    setFiles(prev => [...prev, ...txtFiles]);
-                    
-                    setTimeout(() => {
-                        extractFromFilesWithAI(txtFiles);
-                    }, 100);
-                }
-            };
+            const handleBrainQueryWithAI = async () => {
+    if (!brainQuery.trim() || storedMeetings.length === 0) return;
+
+    setIsBrainLoading(true);
+    setBrainResponse('');
+
+    try {
+        // Get the current session for auth header
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            throw new Error('Not authenticated');
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/meetings`, {
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`  // Added auth header
+            }
+        });
+        
+        let meetingsForQuery = storedMeetings;
+        
+        if (response.ok) {
+            const latestMeetings = await response.json();
+            meetingsForQuery = latestMeetings.map(meeting => ({
+                id: meeting.id,
+                date: meeting.meeting_date,
+                time: meeting.meeting_time,
+                venue: meeting.venue,
+                title: meeting.title,
+                companyAttendees: meeting.company_attendees,
+                clientAttendees: meeting.client_attendees,
+                client: meeting.client || '',
+                project: meeting.project || '',
+                rawNotes: meeting.raw_notes,
+                summary: meeting.summary,
+                createdAt: meeting.created_at
+            }));
+        }
+
+        const meetingData = meetingsForQuery.map(meeting => 
+            `Meeting: ${meeting.title} (${meeting.date})
+Location: ${meeting.venue || 'Not specified'}
+Client: ${meeting.client || 'Not specified'}
+Project: ${meeting.project || 'Not specified'}
+Attendees: ${meeting.companyAttendees || ''} ${meeting.clientAttendees || ''}
+Summary: ${meeting.summary}
+---`
+        ).join('\n\n');
+
+        const queryContext = `You have access to ${meetingsForQuery.length} stored meetings. Here's the data:
+
+${meetingData}
+
+User Question: ${brainQuery}`;
+
+        const aiResponse = await callAI('query', queryContext);
+        setBrainResponse(aiResponse);
+        
+    } catch (error) {
+        console.error('Brain query failed:', error);
+        setBrainResponse(`Sorry, I couldn't process your query: ${error.message}. Please try again with a different question.`);
+    } finally {
+        setIsBrainLoading(false);
+    }
+};
 
             const removeFile = (index) => {
                 setFiles(prev => prev.filter((_, i) => i !== index));
@@ -866,25 +1003,62 @@ User Question: ${brainQuery}`;
                                 </div>
                             </div>
                             
-                            <button
-                                onClick={() => setShowBrain(!showBrain)}
-                                style={{
-                                    padding: '12px 20px',
-                                    borderRadius: '8px',
-                                    border: '2px solid #374528',
-                                    backgroundColor: showBrain ? '#374528' : 'transparent',
-                                    color: showBrain ? 'white' : '#374528',
-                                    fontSize: '16px',
-                                    fontWeight: '600',
-                                    cursor: 'pointer',
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '16px'
+                            }}>
+                                <button
+                                    onClick={() => setShowBrain(!showBrain)}
+                                    style={{
+                                        padding: '12px 20px',
+                                        borderRadius: '8px',
+                                        border: '2px solid #374528',
+                                        backgroundColor: showBrain ? '#374528' : 'transparent',
+                                        color: showBrain ? 'white' : '#374528',
+                                        fontSize: '16px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px'
+                                    }}
+                                >
+                                    🧠 Brain ({storedMeetings.length})
+                                </button>
+                                
+                                <div style={{
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '8px'
-                                }}
-                            >
-                                🧠 Brain ({storedMeetings.length})
-                            </button>
-                        </div>
+                                    gap: '12px',
+                                    padding: '8px 16px',
+                                    backgroundColor: '#f3f4f6',
+                                    borderRadius: '8px'
+                                    }}>
+                                    <span style={{
+                                        fontSize: '14px',
+                                        color: '#374528'
+                                    }}>
+                                        {userEmail}
+                                    </span>
+
+                                    <button
+                                        onClick={handleLogout}
+                                        style={{
+                                            padding: '6px 12px',
+                                            backgroundColor: '#dc3545',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            fontSize: '12px',
+                                            fontWeight: '500'
+                                        }}
+                                    >
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
                     </header>
 
                     <main style={{
@@ -1758,26 +1932,40 @@ User Question: ${brainQuery}`;
                                                                )}
                                                            </div>
                                                            <button
-                                                               onClick={() => deleteMeeting(meeting.id)}
-                                                               style={{
-                                                                   background: 'none',
-                                                                   border: 'none',
-                                                                   color: '#dc3545',
-                                                                   cursor: 'pointer',
-                                                                   fontSize: '14px',
-                                                                   padding: '4px'
-                                                               }}
-                                                               title="Delete meeting"
-                                                           >
-                                                               🗑️
-                                                           </button>
+                                                            {meeting.createdBy === currentUserEmail ? (
+                                                                <button
+                                                                    onClick={() => deleteMeeting(meeting.id)}
+                                                                    style={{
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        color: '#dc3545',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '14px',
+                                                                        padding: '4px'
+                                                                    }}
+                                                                    title="Delete meeting"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            ) : (
+                                                                <span style={{
+                                                                    color: '#6b7280',
+                                                                    fontSize: '12px',
+                                                                    fontStyle: 'italic',
+                                                                    padding: '4px'
+                                                                }}>
+                                                                    (attendee)
+                                                                </span>
+                                                            )}
                                                        </div>
                                                        {(meeting.companyAttendees || meeting.clientAttendees) && (
-                                                           <div style={{
-                                                               fontSize: '12px',
-                                                               color: '#6b7280',
-                                                               marginBottom: '8px'
-                                                           }}>
+                                                           <<div style={{
+                                                                 fontSize: '12px',
+                                                                color: '#6b7280',
+                                                                marginTop: '4px'
+                                                            }}>
+                                                                💡 Enter attendees as "Email" or "Name Surname", separated by commas
+                                                            </div>  
                                                                {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
                                                                {meeting.companyAttendees && meeting.clientAttendees && ' • '}
                                                                {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
