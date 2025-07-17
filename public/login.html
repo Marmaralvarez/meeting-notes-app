@@ -190,8 +190,17 @@
 
     <script>
         // Supabase initialization
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced by build
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced by build
+        
+        console.log('Initializing Supabase with URL:', SUPABASE_URL);
+        
+        if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+            console.error('Supabase URL not configured');
+            document.getElementById('error-message').textContent = 'Configuration error. Please check environment variables.';
+            document.getElementById('error-message').style.display = 'block';
+        }
+        
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // UI elements
@@ -258,6 +267,7 @@
             // Disable button and show loading
             submitButton.disabled = true;
             buttonText.innerHTML = isSignUp ? 'Creating account...' : 'Signing in...';
+            hideMessages();
             
             try {
                 let result;
@@ -281,10 +291,13 @@
                     
                     if (result.error) throw result.error;
                     
-                    // Redirect to app
+                    console.log('Login successful, redirecting to app...');
+                    // Clear any existing session first, then redirect
+                    sessionStorage.setItem('just_logged_in', 'true');
                     window.location.href = '/app.html';
                 }
             } catch (error) {
+                console.error('Auth error:', error);
                 showError(error.message || 'An error occurred. Please try again.');
             } finally {
                 // Re-enable button
@@ -306,7 +319,7 @@
             
             try {
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/app.html`,
+                    redirectTo: `${window.location.origin}/reset-password`,
                 });
                 
                 if (error) throw error;
@@ -319,14 +332,32 @@
         
         // Check if user is already logged in
         async function checkAuth() {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-                window.location.href = '/app.html';
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    console.error('Session check error:', error);
+                    return;
+                }
+                
+                if (session && session.user) {
+                    console.log('User already logged in, redirecting...');
+                    window.location.href = '/app.html';
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
             }
         }
         
-        // Check auth on page load
-        checkAuth();
+        // Check auth on page load, but only after a delay to prevent infinite loops
+        setTimeout(() => {
+            // Only check if we didn't just redirect from app
+            if (!sessionStorage.getItem('came_from_app')) {
+                checkAuth();
+            } else {
+                sessionStorage.removeItem('came_from_app');
+            }
+        }, 100);
     </script>
 </body>
 </html>
