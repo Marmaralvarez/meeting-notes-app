@@ -19,8 +19,8 @@ loginHtml = loginHtml.replace(/YOUR_SUPABASE_ANON_KEY/g, supabaseAnonKey);
 appHtml = appHtml.replace(/YOUR_SUPABASE_URL/g, supabaseUrl);
 appHtml = appHtml.replace(/YOUR_SUPABASE_ANON_KEY/g, supabaseAnonKey);
 
-resetHtml = resetHtml.replace(/your_supabase_url/g, supabaseUrl);
-resetHtml = resetHtml.replace(/your_supabase_anon_key/g, supabaseAnonKey);
+resetHtml = resetHtml.replace(/YOUR_SUPABASE_URL/g, supabaseUrl);
+resetHtml = resetHtml.replace(/YOUR_SUPABASE_ANON_KEY/g, supabaseAnonKey);
 
 // Write the files back
 fs.writeFileSync('./public/login.html', loginHtml);
