@@ -286,8 +286,6 @@
                     if (result.error) throw result.error;
                     
                     console.log('Login successful, redirecting to app...');
-                    // Clear any existing session first, then redirect
-                    sessionStorage.setItem('just_logged_in', 'true');
                     window.location.href = '/app.html';
                 }
             } catch (error) {
@@ -343,15 +341,8 @@
             }
         }
         
-        // Check auth on page load, but only after a delay to prevent infinite loops
-        setTimeout(() => {
-            // Only check if we didn't just redirect from app
-            if (!sessionStorage.getItem('came_from_app')) {
-                checkAuth();
-            } else {
-                sessionStorage.removeItem('came_from_app');
-            }
-        }, 100);
+        // Check auth on page load
+        checkAuth();
     </script>
 </body>
 </html>
