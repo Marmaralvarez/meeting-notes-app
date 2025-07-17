@@ -1265,7 +1265,7 @@ ${summaryToCopy}`;
                                     </span>
                                 )}
                             </h2>
-                            
+
                             <div style={{
                                 display: 'grid',
                                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -1345,7 +1345,7 @@ ${summaryToCopy}`;
                                         }}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label style={{
                                         display: 'block',
@@ -1369,7 +1369,7 @@ ${summaryToCopy}`;
                                         }}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label style={{
                                         display: 'block',
@@ -1393,7 +1393,7 @@ ${summaryToCopy}`;
                                         }}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label style={{
                                         display: 'block',
@@ -1418,7 +1418,7 @@ ${summaryToCopy}`;
                                         }}
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label style={{
                                         display: 'block',
@@ -1450,7 +1450,7 @@ ${summaryToCopy}`;
                                         💡 Enter attendees as "Email" or "Name Surname", separated by commas
                                     </div>
                                 </div>
-                                
+
                                 <div>
                                     <label style={{
                                         display: 'block',
@@ -1474,16 +1474,16 @@ ${summaryToCopy}`;
                                             fontSize: '14px'
                                         }}
                                     />
+                                    <div style={{
+                                        fontSize: '12px',
+                                        color: '#6b7280',
+                                        marginTop: '4px'
+                                    }}>
+                                        💡 Enter attendees as "Email" or "Name Surname", separated by commas
+                                    </div>  
+                                </div>
+                            </div> {/* <-- Close the grid container div here */}
 
-                                        <div style={{
-                                            fontSize: '12px',
-                                            color: '#6b7280',
-                                            marginTop: '4px'
-                                        }}>
-                                            💡 Enter attendees as "Email" or "Name Surname", separated by commas
-                                        </div>  
-                            </div>
-                            
                             <button
                                 onClick={generateSummaryWithAI}
                                 disabled={!rawNotes.trim() || isGenerating}
@@ -1509,6 +1509,7 @@ ${summaryToCopy}`;
                                 )}
                             </button>
                         </section>
+
 
                         {/* Summary and Brain Grid */}
                         <div style={{
