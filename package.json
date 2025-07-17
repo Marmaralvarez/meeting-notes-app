@@ -2,7 +2,7 @@
   "name": "meeting-notes-app",
   "version": "1.0.0",
   "scripts": {
-    "build": "echo 'Static files ready'",
+    "build": "node build.js",
     "start": "echo 'Static site'"
   }
 }
