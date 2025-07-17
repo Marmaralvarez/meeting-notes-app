@@ -317,21 +317,14 @@
                 
                 const { data: { session }, error } = await supabase.auth.getSession();
                 
-                if (error) {
-                    console.error('Session error:', error);
-                    setIsCheckingAuth(false);
-                    return;
-                }
-                
-                if (!session || !session.user) {
+                if (!error && session && session.user) {
+                    console.log('Authentication successful for:', session.user.email);
+                    currentUserEmail = session.user.email;
+                    setUserEmail(session.user.email);
+                } else {
                     console.log('No valid session found');
-                    setIsCheckingAuth(false);
-                    return;
                 }
                 
-                console.log('Authentication successful for:', session.user.email);
-                currentUserEmail = session.user.email;
-                setUserEmail(session.user.email);
                 setIsCheckingAuth(false);
             } catch (error) {
                 console.error('Auth check failed:', error);
