@@ -9,11 +9,24 @@
     {
       "src": "/reset-password",
       "dest": "/reset-password.html"
+    },
+    {
+      "src": "/app",
+      "dest": "/app.html"
     }
   ],
   "headers": [
     {
       "source": "/app.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/login.html",
       "headers": [
         {
           "key": "Cache-Control",
