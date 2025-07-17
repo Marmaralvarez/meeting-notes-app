@@ -12,6 +12,13 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 console.log('Building with Supabase URL:', supabaseUrl ? 'Present' : 'Missing');
 console.log('Building with Anon Key:', supabaseAnonKey ? 'Present' : 'Missing');
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Missing environment variables!');
+  console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'SET' : 'MISSING');
+  console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
+  process.exit(1);
+}
+
 // Replace placeholders with env variables
 loginHtml = loginHtml.replace(/YOUR_SUPABASE_URL/g, supabaseUrl);
 loginHtml = loginHtml.replace(/YOUR_SUPABASE_ANON_KEY/g, supabaseAnonKey);
@@ -27,4 +34,4 @@ fs.writeFileSync('./public/login.html', loginHtml);
 fs.writeFileSync('./public/app.html', appHtml);
 fs.writeFileSync('./public/reset-password.html', resetHtml);
 
-console.log('Build complete! Environment variables injected into HTML files.');
+console.log('✅ Build complete! Environment variables injected into HTML files.');
