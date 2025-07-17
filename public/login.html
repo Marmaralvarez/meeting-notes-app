@@ -195,12 +195,6 @@
         
         console.log('Initializing Supabase with URL:', SUPABASE_URL);
         
-        if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
-            console.error('Supabase URL not configured');
-            document.getElementById('error-message').textContent = 'Configuration error. Please check environment variables.';
-            document.getElementById('error-message').style.display = 'block';
-        }
-        
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // UI elements
