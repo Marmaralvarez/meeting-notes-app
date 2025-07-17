@@ -293,23 +293,25 @@
             const [userEmail, setUserEmail] = useState('');
             const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-            // Check authentication on component mount
-            useEffect(() => {
-                checkAuth();
-                
-                // Set up auth state listener
-                const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-                    console.log('Auth state changed:', event, session?.user?.email);
-                    if (event === 'SIGNED_OUT') {
-                        sessionStorage.setItem('came_from_app', 'true');
-                        window.location.href = '/login.html';
-                    }
-                });
-                
-                return () => {
-                    authListener.subscription.unsubscribe();
-                };
-            }, []);
+            // TEMPORARILY DISABLED FOR DEBUGGING
+                useEffect(() => {
+                    // checkAuth(); // DISABLED
+                    setIsCheckingAuth(false); // Skip auth loading screen
+                    setUserEmail('debug@test.com'); // Set dummy email for testing
+                    
+                    // Keep the auth state listener but disable the redirect
+                    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+                        console.log('Auth state changed:', event, session?.user?.email);
+                        // DISABLED: if (event === 'SIGNED_OUT') {
+                        //     sessionStorage.setItem('came_from_app', 'true');
+                        //     window.location.href = '/login.html';
+                        // }
+                    });
+                    
+                    return () => {
+                        authListener.subscription.unsubscribe();
+                    };
+                }, []);
 
             const checkAuth = async () => {
                 try {
@@ -358,25 +360,25 @@
                     window.location.href = '/login.html';
                 }
             };
-
+            // DISABLED FOR DEBUGGING
             // Add loading state at the beginning of the component return
-            if (isCheckingAuth) {
-                return (
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        height: '100vh',
-                        fontSize: '18px',
-                        color: '#6b7280',
-                        flexDirection: 'column',
-                        gap: '16px'
-                    }}>
-                        <div>🔐 Checking authentication...</div>
-                        <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
-                    </div>
-                );
-            }
+            //if (isCheckingAuth) {
+            //    return (
+            //        <div style={{
+            //            display: 'flex',
+            //            justifyContent: 'center',
+            //            alignItems: 'center',
+            //           height: '100vh',
+            //            fontSize: '18px',
+            //           color: '#6b7280',
+            //            flexDirection: 'column',
+            //            gap: '16px'
+            //        }}>
+            //            <div>🔐 Checking authentication...</div>
+            //           <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
+            //        </div>
+            //   );
+            // }
 
             // Brain functionality
             const [storedMeetings, setStoredMeetings] = useState([]);
