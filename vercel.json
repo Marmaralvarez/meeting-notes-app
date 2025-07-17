@@ -33,6 +33,15 @@
           "value": "no-store, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/reset-password.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, must-revalidate"
+        }
+      ]
     }
   ]
 }
