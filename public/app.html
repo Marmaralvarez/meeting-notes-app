@@ -293,19 +293,17 @@
             const [userEmail, setUserEmail] = useState('');
             const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-            // TEMPORARILY DISABLED FOR DEBUGGING
+            // Check authentication on component mount
                 useEffect(() => {
-                    // checkAuth(); // DISABLED
-                    setIsCheckingAuth(false); // Skip auth loading screen
-                    setUserEmail('debug@test.com'); // Set dummy email for testing
+                    checkAuth();
                     
-                    // Keep the auth state listener but disable the redirect
+                    // Set up auth state listener
                     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
                         console.log('Auth state changed:', event, session?.user?.email);
-                        // DISABLED: if (event === 'SIGNED_OUT') {
-                        //     sessionStorage.setItem('came_from_app', 'true');
-                        //     window.location.href = '/login.html';
-                        // }
+                        if (event === 'SIGNED_OUT') {
+                            sessionStorage.setItem('came_from_app', 'true');
+                            window.location.href = '/login.html';
+                        }
                     });
                     
                     return () => {
@@ -360,25 +358,25 @@
                     window.location.href = '/login.html';
                 }
             };
-            // DISABLED FOR DEBUGGING
+            
             // Add loading state at the beginning of the component return
-            //if (isCheckingAuth) {
-            //    return (
-            //        <div style={{
-            //            display: 'flex',
-            //            justifyContent: 'center',
-            //            alignItems: 'center',
-            //           height: '100vh',
-            //            fontSize: '18px',
-            //           color: '#6b7280',
-            //            flexDirection: 'column',
-            //            gap: '16px'
-            //        }}>
-            //            <div>🔐 Checking authentication...</div>
-            //           <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
-            //        </div>
-            //   );
-            // }
+            if (isCheckingAuth) {
+                return (
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                       height: '100vh',
+                        fontSize: '18px',
+                       color: '#6b7280',
+                        flexDirection: 'column',
+                        gap: '16px'
+                    }}>
+                        <div>🔐 Checking authentication...</div>
+                       <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
+                    </div>
+               );
+             }
 
             // Brain functionality
             const [storedMeetings, setStoredMeetings] = useState([]);
@@ -405,9 +403,7 @@
                     const { data: { session } } = await supabase.auth.getSession();
                     if (!session) {
                         console.log('No session for loading meetings');
-                        sessionStorage.setItem('came_from_app', 'true');
-                        window.location.href = '/login.html';
-                        return;
+                        return; // Don't redirect, just return
                     }
                     
                     const response = await fetch(`${API_BASE_URL}/meetings`, {
@@ -434,11 +430,10 @@
                             createdBy: meeting.created_by
                         }));
                         setStoredMeetings(appFormatMeetings);
-                    } else if (response.status === 401) {
-                        console.log('Unauthorized, redirecting to login');
-                        sessionStorage.setItem('came_from_app', 'true');
-                        window.location.href = '/login.html';
-                    }
+                        } else if (response.status === 401) {
+                            console.log('Unauthorized - session may have expired');
+                            // Don't redirect here, let the main auth check handle it
+                        }
                 } catch (error) {
                     console.error('Error loading meetings:', error);
                 } finally {
