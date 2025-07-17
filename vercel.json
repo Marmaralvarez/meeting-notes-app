@@ -5,6 +5,12 @@
       "destination": "/login.html"
     }
   ],
+  "routes": [
+    {
+      "src": "/reset-password",
+      "dest": "/reset-password.html"
+    }
+  ],
   "headers": [
     {
       "source": "/app.html",
