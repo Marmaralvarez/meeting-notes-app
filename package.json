@@ -4,5 +4,8 @@
   "scripts": {
     "build": "node build.js",
     "start": "echo 'Static site'"
+  },
+  "devDependencies": {
+    "fs": "*"
   }
 }
