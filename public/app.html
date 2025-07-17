@@ -152,13 +152,21 @@
     
     <script type="text/babel">
         const { useState, useEffect } = React;
+        
         // Supabase initialization
-            const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced with env variable
-            const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced with env variable
-            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced with env variable
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced with env variable
+        
+        console.log('App initializing with Supabase URL:', SUPABASE_URL);
+        
+        if (!SUPABASE_URL || SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+            console.error('Supabase configuration missing in app.html');
+        }
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            // Auth state
-            let currentUserEmail = null;
+        // Auth state
+        let currentUserEmail = null;
 
         // Enhanced markdown renderer with proper table handling
         const renderMarkdown = (text) => {
@@ -289,64 +297,90 @@
             const [userEmail, setUserEmail] = useState('');
             const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-                // Check authentication on component mount
-                useEffect(() => {
-                    checkAuth();
-                    
-                    // Set up auth state listener
-                    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-                        if (event === 'SIGNED_OUT') {
-                            window.location.href = '/login.html';
-                        }
-                    });
-                    
-                    return () => {
-                        authListener.subscription.unsubscribe();
-                    };
-                }, []);
-
-                const checkAuth = async () => {
-                    try {
-                        const { data: { session } } = await supabase.auth.getSession();
-                        
-                        if (!session) {
-                            window.location.href = '/login.html';
-                            return;
-                        }
-                        
-                        currentUserEmail = session.user.email;
-                        setUserEmail(session.user.email);
-                        setIsCheckingAuth(false);
-                    } catch (error) {
-                        console.error('Auth check failed:', error);
+            // Check authentication on component mount
+            useEffect(() => {
+                checkAuth();
+                
+                // Set up auth state listener
+                const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+                    console.log('Auth state changed:', event, session?.user?.email);
+                    if (event === 'SIGNED_OUT') {
+                        sessionStorage.setItem('came_from_app', 'true');
                         window.location.href = '/login.html';
                     }
+                });
+                
+                return () => {
+                    authListener.subscription.unsubscribe();
                 };
+            }, []);
 
-                const handleLogout = async () => {
-                    try {
-                        await supabase.auth.signOut();
+            const checkAuth = async () => {
+                try {
+                    console.log('Checking authentication...');
+                    
+                    // Clear the just_logged_in flag
+                    sessionStorage.removeItem('just_logged_in');
+                    
+                    const { data: { session }, error } = await supabase.auth.getSession();
+                    
+                    if (error) {
+                        console.error('Session error:', error);
+                        sessionStorage.setItem('came_from_app', 'true');
                         window.location.href = '/login.html';
-                    } catch (error) {
-                        console.error('Logout failed:', error);
+                        return;
                     }
-                };
-
-                // Add loading state at the beginning of the component return
-                if (isCheckingAuth) {
-                    return (
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            height: '100vh',
-                            fontSize: '18px',
-                            color: '#6b7280'
-                        }}>
-                            Checking authentication...
-                        </div>
-                    );
+                    
+                    if (!session || !session.user) {
+                        console.log('No valid session found, redirecting to login');
+                        sessionStorage.setItem('came_from_app', 'true');
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    
+                    console.log('Authentication successful for:', session.user.email);
+                    currentUserEmail = session.user.email;
+                    setUserEmail(session.user.email);
+                    setIsCheckingAuth(false);
+                } catch (error) {
+                    console.error('Auth check failed:', error);
+                    sessionStorage.setItem('came_from_app', 'true');
+                    window.location.href = '/login.html';
                 }
+            };
+
+            const handleLogout = async () => {
+                try {
+                    console.log('Logging out...');
+                    await supabase.auth.signOut();
+                    sessionStorage.setItem('came_from_app', 'true');
+                    window.location.href = '/login.html';
+                } catch (error) {
+                    console.error('Logout failed:', error);
+                    // Force redirect even if logout fails
+                    sessionStorage.setItem('came_from_app', 'true');
+                    window.location.href = '/login.html';
+                }
+            };
+
+            // Add loading state at the beginning of the component return
+            if (isCheckingAuth) {
+                return (
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100vh',
+                        fontSize: '18px',
+                        color: '#6b7280',
+                        flexDirection: 'column',
+                        gap: '16px'
+                    }}>
+                        <div>🔐 Checking authentication...</div>
+                        <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
+                    </div>
+                );
+            }
 
             // Brain functionality
             const [storedMeetings, setStoredMeetings] = useState([]);
@@ -362,23 +396,28 @@
             const API_BASE_URL = 'https://meeting-notes-api-watertrace.vercel.app/api';
 
             useEffect(() => {
-                loadMeetingsFromDatabase();
-            }, []);
+                if (!isCheckingAuth && userEmail) {
+                    loadMeetingsFromDatabase();
+                }
+            }, [isCheckingAuth, userEmail]);
 
             const loadMeetingsFromDatabase = async () => {
-    setIsLoadingMeetings(true);
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            window.location.href = '/login.html';
-            return;
-        }
-        
-        const response = await fetch(`${API_BASE_URL}/meetings`, {
-            headers: {
-                'Authorization': `Bearer ${session.access_token}`
-            }
-        });
+                setIsLoadingMeetings(true);
+                try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                        console.log('No session for loading meetings');
+                        sessionStorage.setItem('came_from_app', 'true');
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    
+                    const response = await fetch(`${API_BASE_URL}/meetings`, {
+                        headers: {
+                            'Authorization': `Bearer ${session.access_token}`
+                        }
+                    });
+                    
                     if (response.ok) {
                         const meetings = await response.json();
                         const appFormatMeetings = meetings.map(meeting => ({
@@ -397,6 +436,10 @@
                             createdBy: meeting.created_by
                         }));
                         setStoredMeetings(appFormatMeetings);
+                    } else if (response.status === 401) {
+                        console.log('Unauthorized, redirecting to login');
+                        sessionStorage.setItem('came_from_app', 'true');
+                        window.location.href = '/login.html';
                     }
                 } catch (error) {
                     console.error('Error loading meetings:', error);
@@ -406,189 +449,189 @@
             };
 
             const saveMeetingToDatabase = async (meetingRecord) => {
-    try {
-        console.log('=== SAVING TO DATABASE ===');
-        
-        // Get the current session for auth header
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            throw new Error('Not authenticated');
-        }
-        
-        // Format exactly like the working test with new fields
-        const payload = {
-            id: meetingRecord.id,
-            title: meetingRecord.title,
-            meeting_date: meetingRecord.date,
-            meeting_time: meetingRecord.time,
-            venue: meetingRecord.venue,
-            company_attendees: meetingRecord.companyAttendees,
-            client_attendees: meetingRecord.clientAttendees,
-            client: meetingRecord.client,
-            project: meetingRecord.project,
-            raw_notes: meetingRecord.rawNotes,
-            summary: meetingRecord.summary,
-            created_at: meetingRecord.createdAt
-        };
-        
-        console.log('Payload to send:', payload);
-        console.log('Summary length:', payload.summary.length);
-        console.log('Raw notes length:', payload.raw_notes.length);
-        
-        const response = await fetch(`${API_BASE_URL}/meetings`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`  // Added auth header
-            },
-            body: JSON.stringify(payload)
-        });
-        
-        console.log('Response status:', response.status);
-        
-        const responseText = await response.text();
-        console.log('Response text:', responseText);
-        
-        if (response.ok) {
-            const parsedResponse = JSON.parse(responseText);
-            console.log('✅ Save successful:', parsedResponse);
-            return parsedResponse;
-        } else {
-            console.error('❌ HTTP Error:', response.status);
-            console.error('Error response:', responseText);
-            throw new Error(`Database API returned ${response.status}: ${responseText}`);
-        }
-    } catch (error) {
-        console.error('❌ Save error:', error);
-        throw new Error(`Failed to save meeting: ${error.message}`);
-    }
-};
+                try {
+                    console.log('=== SAVING TO DATABASE ===');
+                    
+                    // Get the current session for auth header
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                        throw new Error('Not authenticated');
+                    }
+                    
+                    // Format exactly like the working test with new fields
+                    const payload = {
+                        id: meetingRecord.id,
+                        title: meetingRecord.title,
+                        meeting_date: meetingRecord.date,
+                        meeting_time: meetingRecord.time,
+                        venue: meetingRecord.venue,
+                        company_attendees: meetingRecord.companyAttendees,
+                        client_attendees: meetingRecord.clientAttendees,
+                        client: meetingRecord.client,
+                        project: meetingRecord.project,
+                        raw_notes: meetingRecord.rawNotes,
+                        summary: meetingRecord.summary,
+                        created_at: meetingRecord.createdAt
+                    };
+                    
+                    console.log('Payload to send:', payload);
+                    console.log('Summary length:', payload.summary.length);
+                    console.log('Raw notes length:', payload.raw_notes.length);
+                    
+                    const response = await fetch(`${API_BASE_URL}/meetings`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    console.log('Response status:', response.status);
+                    
+                    const responseText = await response.text();
+                    console.log('Response text:', responseText);
+                    
+                    if (response.ok) {
+                        const parsedResponse = JSON.parse(responseText);
+                        console.log('✅ Save successful:', parsedResponse);
+                        return parsedResponse;
+                    } else {
+                        console.error('❌ HTTP Error:', response.status);
+                        console.error('Error response:', responseText);
+                        throw new Error(`Database API returned ${response.status}: ${responseText}`);
+                    }
+                } catch (error) {
+                    console.error('❌ Save error:', error);
+                    throw new Error(`Failed to save meeting: ${error.message}`);
+                }
+            };
 
             const deleteMeetingFromDatabase = async (id) => {
-    try {
-        // Get the current session for auth header
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            throw new Error('Not authenticated');
-        }
-        
-        const response = await fetch(`${API_BASE_URL}/meetings?id=${id}`, {
-            method: 'DELETE',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`  // Added auth header
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-    } catch (error) {
-        throw error;
-    }
-};
+                try {
+                    // Get the current session for auth header
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                        throw new Error('Not authenticated');
+                    }
+                    
+                    const response = await fetch(`${API_BASE_URL}/meetings?id=${id}`, {
+                        method: 'DELETE',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    throw error;
+                }
+            };
 
             const callAI = async (type, content, prompt = '') => {
-    try {
-        // Get the current session for auth header
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            throw new Error('Not authenticated');
-        }
-        
-        console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
-        const response = await fetch(`${API_BASE_URL}/ai`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`  // Added auth header
-            },
-            body: JSON.stringify({
-                type,
-                content,
-                prompt
-            })
-        });
+                try {
+                    // Get the current session for auth header
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                        throw new Error('Not authenticated');
+                    }
+                    
+                    console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
+                    const response = await fetch(`${API_BASE_URL}/ai`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                        },
+                        body: JSON.stringify({
+                            type,
+                            content,
+                            prompt
+                        })
+                    });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `HTTP ${response.status}`);
-        }
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
 
-        const data = await response.json();
-        console.log(`AI response for ${type}:`, data.result);
-        return data.result;
-    } catch (error) {
-        console.error('AI API Error:', error);
-        throw error;
-    }
-};
+                    const data = await response.json();
+                    console.log(`AI response for ${type}:`, data.result);
+                    return data.result;
+                } catch (error) {
+                    console.error('AI API Error:', error);
+                    throw error;
+                }
+            };
 
             const handleBrainQueryWithAI = async () => {
-    if (!brainQuery.trim() || storedMeetings.length === 0) return;
+                if (!brainQuery.trim() || storedMeetings.length === 0) return;
 
-    setIsBrainLoading(true);
-    setBrainResponse('');
+                setIsBrainLoading(true);
+                setBrainResponse('');
 
-    try {
-        // Get the current session for auth header
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            throw new Error('Not authenticated');
-        }
-        
-        const response = await fetch(`${API_BASE_URL}/meetings`, {
-            headers: {
-                'Authorization': `Bearer ${session.access_token}`  // Added auth header
-            }
-        });
-        
-        let meetingsForQuery = storedMeetings;
-        
-        if (response.ok) {
-            const latestMeetings = await response.json();
-            meetingsForQuery = latestMeetings.map(meeting => ({
-                id: meeting.id,
-                date: meeting.meeting_date,
-                time: meeting.meeting_time,
-                venue: meeting.venue,
-                title: meeting.title,
-                companyAttendees: meeting.company_attendees,
-                clientAttendees: meeting.client_attendees,
-                client: meeting.client || '',
-                project: meeting.project || '',
-                rawNotes: meeting.raw_notes,
-                summary: meeting.summary,
-                createdAt: meeting.created_at
-            }));
-        }
+                try {
+                    // Get the current session for auth header
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                        throw new Error('Not authenticated');
+                    }
+                    
+                    const response = await fetch(`${API_BASE_URL}/meetings`, {
+                        headers: {
+                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                        }
+                    });
+                    
+                    let meetingsForQuery = storedMeetings;
+                    
+                    if (response.ok) {
+                        const latestMeetings = await response.json();
+                        meetingsForQuery = latestMeetings.map(meeting => ({
+                            id: meeting.id,
+                            date: meeting.meeting_date,
+                            time: meeting.meeting_time,
+                            venue: meeting.venue,
+                            title: meeting.title,
+                            companyAttendees: meeting.company_attendees,
+                            clientAttendees: meeting.client_attendees,
+                            client: meeting.client || '',
+                            project: meeting.project || '',
+                            rawNotes: meeting.raw_notes,
+                            summary: meeting.summary,
+                            createdAt: meeting.created_at
+                        }));
+                    }
 
-        const meetingData = meetingsForQuery.map(meeting => 
-            `Meeting: ${meeting.title} (${meeting.date})
+                    const meetingData = meetingsForQuery.map(meeting => 
+                        `Meeting: ${meeting.title} (${meeting.date})
 Location: ${meeting.venue || 'Not specified'}
 Client: ${meeting.client || 'Not specified'}
 Project: ${meeting.project || 'Not specified'}
 Attendees: ${meeting.companyAttendees || ''} ${meeting.clientAttendees || ''}
 Summary: ${meeting.summary}
 ---`
-        ).join('\n\n');
+                    ).join('\n\n');
 
-        const queryContext = `You have access to ${meetingsForQuery.length} stored meetings. Here's the data:
+                    const queryContext = `You have access to ${meetingsForQuery.length} stored meetings. Here's the data:
 
 ${meetingData}
 
 User Question: ${brainQuery}`;
 
-        const aiResponse = await callAI('query', queryContext);
-        setBrainResponse(aiResponse);
-        
-    } catch (error) {
-        console.error('Brain query failed:', error);
-        setBrainResponse(`Sorry, I couldn't process your query: ${error.message}. Please try again with a different question.`);
-    } finally {
-        setIsBrainLoading(false);
-    }
-};
+                    const aiResponse = await callAI('query', queryContext);
+                    setBrainResponse(aiResponse);
+                    
+                } catch (error) {
+                    console.error('Brain query failed:', error);
+                    setBrainResponse(`Sorry, I couldn't process your query: ${error.message}. Please try again with a different question.`);
+                } finally {
+                    setIsBrainLoading(false);
+                }
+            };
 
             const removeFile = (index) => {
                 setFiles(prev => prev.filter((_, i) => i !== index));
@@ -1482,7 +1525,7 @@ ${summaryToCopy}`;
                                         💡 Enter attendees as "Email" or "Name Surname", separated by commas
                                     </div>  
                                 </div>
-                            </div> {/* <-- Close the grid container div here */}
+                            </div>
 
                             <button
                                 onClick={generateSummaryWithAI}
@@ -1509,7 +1552,6 @@ ${summaryToCopy}`;
                                 )}
                             </button>
                         </section>
-
 
                         {/* Summary and Brain Grid */}
                         <div style={{
@@ -1772,164 +1814,164 @@ ${summaryToCopy}`;
                                                     borderRadius: '6px',
                                                     cursor: (brainQuery.trim() && storedMeetings.length > 0) ? 'pointer' : 'not-allowed',
                                                     fontSize: '14px',
-                                                   fontWeight: '500'
-                                               }}
-                                           >
-                                               {isBrainLoading ? '🤖' : '🔍'}
-                                           </button>
-                                       </div>
-                                       
-                                       {/* Quick query suggestions */}
-                                       {storedMeetings.length > 0 && (
-                                           <div style={{ marginTop: '8px' }}>
-                                               <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
-                                                   Quick questions:
-                                               </div>
-                                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                                   {[
-                                                       'What action items were discussed?',
-                                                       'Which clients are we working with?',
-                                                       'What projects are active?',
-                                                       'Who attended recent meetings?',
-                                                       'What decisions were made?',
-                                                       'What are the next steps?'
-                                                   ].map((suggestion, index) => (
-                                                       <button
-                                                           key={index}
-                                                           onClick={() => setBrainQuery(suggestion)}
-                                                           style={{
-                                                               padding: '4px 8px',
-                                                               fontSize: '11px',
-                                                               backgroundColor: '#f3f4f6',
-                                                               border: '1px solid #e5e7eb',
-                                                               borderRadius: '4px',
-                                                               cursor: 'pointer',
-                                                               color: '#374528'
-                                                           }}
-                                                       >
-                                                           {suggestion}
-                                                       </button>
-                                                   ))}
-                                               </div>
-                                           </div>
-                                       )}
-                                   </div>
+                                                    fontWeight: '500'
+                                                }}
+                                            >
+                                                {isBrainLoading ? '🤖' : '🔍'}
+                                            </button>
+                                        </div>
+                                        
+                                        {/* Quick query suggestions */}
+                                        {storedMeetings.length > 0 && (
+                                            <div style={{ marginTop: '8px' }}>
+                                                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                                                    Quick questions:
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                                    {[
+                                                        'What action items were discussed?',
+                                                        'Which clients are we working with?',
+                                                        'What projects are active?',
+                                                        'Who attended recent meetings?',
+                                                        'What decisions were made?',
+                                                        'What are the next steps?'
+                                                    ].map((suggestion, index) => (
+                                                        <button
+                                                            key={index}
+                                                            onClick={() => setBrainQuery(suggestion)}
+                                                            style={{
+                                                                padding: '4px 8px',
+                                                                fontSize: '11px',
+                                                                backgroundColor: '#f3f4f6',
+                                                                border: '1px solid #e5e7eb',
+                                                                borderRadius: '4px',
+                                                                cursor: 'pointer',
+                                                                color: '#374528'
+                                                            }}
+                                                        >
+                                                            {suggestion}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
 
-                                   {/* Response Section */}
-                                   {brainResponse && (
-                                       <div style={{
-                                           padding: '12px',
-                                           backgroundColor: '#f8faf6',
-                                           borderRadius: '8px',
-                                           marginBottom: '20px',
-                                           border: '1px solid #e5e7eb'
-                                       }}>
-                                           <h4 style={{
-                                               fontSize: '14px',
-                                               fontWeight: '600',
-                                               marginBottom: '8px',
-                                               color: '#374528',
-                                               display: 'flex',
-                                               alignItems: 'center',
-                                               gap: '4px'
-                                           }}>
-                                               🤖 AI Response:
-                                           </h4>
-                                           <div 
-                                               style={{
-                                                   fontSize: '14px',
-                                                   lineHeight: '1.5'
-                                               }}
-                                               className="markdown-content"
-                                               dangerouslySetInnerHTML={{
-                                                   __html: renderMarkdown(brainResponse)
-                                               }}
-                                           />
-                                       </div>
-                                   )}
+                                    {/* Response Section */}
+                                    {brainResponse && (
+                                        <div style={{
+                                            padding: '12px',
+                                            backgroundColor: '#f8faf6',
+                                            borderRadius: '8px',
+                                            marginBottom: '20px',
+                                            border: '1px solid #e5e7eb'
+                                        }}>
+                                            <h4 style={{
+                                                fontSize: '14px',
+                                                fontWeight: '600',
+                                                marginBottom: '8px',
+                                                color: '#374528',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}>
+                                                🤖 AI Response:
+                                            </h4>
+                                            <div 
+                                                style={{
+                                                    fontSize: '14px',
+                                                    lineHeight: '1.5'
+                                                }}
+                                                className="markdown-content"
+                                                dangerouslySetInnerHTML={{
+                                                    __html: renderMarkdown(brainResponse)
+                                                }}
+                                            />
+                                        </div>
+                                    )}
 
-                                   {isBrainLoading && (
-                                       <div style={{
-                                           padding: '20px',
-                                           textAlign: 'center',
-                                           color: '#6b7280',
-                                           backgroundColor: '#f8faf6',
-                                           borderRadius: '8px',
-                                           marginBottom: '20px'
-                                       }}>
-                                           🤖 AI is analyzing your meetings...
-                                       </div>
-                                   )}
+                                    {isBrainLoading && (
+                                        <div style={{
+                                            padding: '20px',
+                                            textAlign: 'center',
+                                            color: '#6b7280',
+                                            backgroundColor: '#f8faf6',
+                                            borderRadius: '8px',
+                                            marginBottom: '20px'
+                                        }}>
+                                            🤖 AI is analyzing your meetings...
+                                        </div>
+                                    )}
 
-                                   {/* Stored Meetings List */}
-                                   <div>
-                                       <h3 style={{
-                                           fontSize: '16px',
-                                           fontWeight: '600',
-                                           marginBottom: '12px',
-                                           color: '#374528'
-                                       }}>
-                                           Stored Meetings ({storedMeetings.length})
-                                       </h3>
-                                       
-                                       {isLoadingMeetings ? (
-                                           <div style={{ textAlign: 'center', padding: '20px' }}>
-                                               <div>🔄 Loading meetings...</div>
-                                           </div>
-                                       ) : storedMeetings.length === 0 ? (
-                                           <div style={{
-                                               textAlign: 'center',
-                                               padding: '20px',
-                                               color: '#6b7280',
-                                               fontSize: '14px'
-                                           }}>
-                                               No meetings stored yet. Generate and save an AI summary to get started!
-                                           </div>
-                                       ) : (
-                                           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                                               {storedMeetings.map((meeting) => (
-                                                   <div key={meeting.id} style={{
-                                                       padding: '12px',
-                                                       backgroundColor: '#f8faf6',
-                                                       borderRadius: '8px',
-                                                       marginBottom: '8px',
-                                                       border: '1px solid #e5e7eb'
-                                                   }}>
-                                                       <div style={{
-                                                           display: 'flex',
-                                                           justifyContent: 'space-between',
-                                                           alignItems: 'flex-start',
-                                                           marginBottom: '8px'
-                                                       }}>
-                                                           <div>
-                                                               <h4 style={{
-                                                                   fontSize: '14px',
-                                                                   fontWeight: '600',
-                                                                   margin: '0 0 4px 0',
-                                                                   color: '#374528'
-                                                               }}>
-                                                                   {meeting.title}
-                                                               </h4>
-                                                               <div style={{
-                                                                   fontSize: '12px',
-                                                                   color: '#6b7280'
-                                                               }}>
-                                                                   📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
-                                                                   {meeting.venue && ` • 📍 ${meeting.venue}`}
-                                                               </div>
-                                                               {(meeting.client || meeting.project) && (
-                                                                   <div style={{
-                                                                       fontSize: '12px',
-                                                                       color: '#6b7280',
-                                                                       marginTop: '2px'
-                                                                   }}>
-                                                                       {meeting.client && `🏢 ${meeting.client}`}
-                                                                       {meeting.client && meeting.project && ' • '}
-                                                                       {meeting.project && `📁 ${meeting.project}`}
-                                                                   </div>
-                                                               )}
-                                                           </div>
-                                                          
+                                    {/* Stored Meetings List */}
+                                    <div>
+                                        <h3 style={{
+                                            fontSize: '16px',
+                                            fontWeight: '600',
+                                            marginBottom: '12px',
+                                            color: '#374528'
+                                        }}>
+                                            Stored Meetings ({storedMeetings.length})
+                                        </h3>
+                                        
+                                        {isLoadingMeetings ? (
+                                            <div style={{ textAlign: 'center', padding: '20px' }}>
+                                                <div>🔄 Loading meetings...</div>
+                                            </div>
+                                        ) : storedMeetings.length === 0 ? (
+                                            <div style={{
+                                                textAlign: 'center',
+                                                padding: '20px',
+                                                color: '#6b7280',
+                                                fontSize: '14px'
+                                            }}>
+                                                No meetings stored yet. Generate and save an AI summary to get started!
+                                            </div>
+                                        ) : (
+                                            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                                {storedMeetings.map((meeting) => (
+                                                    <div key={meeting.id} style={{
+                                                        padding: '12px',
+                                                        backgroundColor: '#f8faf6',
+                                                        borderRadius: '8px',
+                                                        marginBottom: '8px',
+                                                        border: '1px solid #e5e7eb'
+                                                    }}>
+                                                        <div style={{
+                                                            display: 'flex',
+                                                            justifyContent: 'space-between',
+                                                            alignItems: 'flex-start',
+                                                            marginBottom: '8px'
+                                                        }}>
+                                                            <div>
+                                                                <h4 style={{
+                                                                    fontSize: '14px',
+                                                                    fontWeight: '600',
+                                                                    margin: '0 0 4px 0',
+                                                                    color: '#374528'
+                                                                }}>
+                                                                    {meeting.title}
+                                                                </h4>
+                                                                <div style={{
+                                                                    fontSize: '12px',
+                                                                    color: '#6b7280'
+                                                                }}>
+                                                                    📅 {meeting.date} {meeting.time && `at ${meeting.time}`}
+                                                                    {meeting.venue && ` • 📍 ${meeting.venue}`}
+                                                                </div>
+                                                                {(meeting.client || meeting.project) && (
+                                                                    <div style={{
+                                                                        fontSize: '12px',
+                                                                        color: '#6b7280',
+                                                                        marginTop: '2px'
+                                                                    }}>
+                                                                        {meeting.client && `🏢 ${meeting.client}`}
+                                                                        {meeting.client && meeting.project && ' • '}
+                                                                        {meeting.project && `📁 ${meeting.project}`}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                           
                                                             {meeting.createdBy === currentUserEmail ? (
                                                                 <button
                                                                     onClick={() => deleteMeeting(meeting.id)}
@@ -1955,41 +1997,41 @@ ${summaryToCopy}`;
                                                                     (attendee)
                                                                 </span>
                                                             )}
-                                                       </div>
-                                                       {(meeting.companyAttendees || meeting.clientAttendees) && (
+                                                        </div>
+                                                        {(meeting.companyAttendees || meeting.clientAttendees) && (
                                                             <div style={{
                                                                 fontSize: '12px',
                                                                 color: '#6b7280',
                                                                 marginBottom: '8px'
                                                             }}>
-                                                               {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
-                                                               {meeting.companyAttendees && meeting.clientAttendees && ' • '}
-                                                               {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
-                                                           </div>
-                                                       )}
-                                                       <div style={{
-                                                           fontSize: '12px',
-                                                           color: '#374528',
-                                                           maxHeight: '60px',
-                                                           overflow: 'hidden',
-                                                           textOverflow: 'ellipsis'
-                                                       }}>
-                                                           {meeting.summary.substring(0, 150)}...
-                                                       </div>
-                                                   </div>
-                                               ))}
-                                           </div>
-                                       )}
-                                   </div>
-                               </div>
-                           )}
-                       </div>
-                   </main>
-               </div>
-           );
-       }
+                                                                {meeting.companyAttendees && `👥 ${meeting.companyAttendees}`}
+                                                                {meeting.companyAttendees && meeting.clientAttendees && ' • '}
+                                                                {meeting.clientAttendees && `🤝 ${meeting.clientAttendees}`}
+                                                            </div>
+                                                        )}
+                                                        <div style={{
+                                                            fontSize: '12px',
+                                                            color: '#374528',
+                                                            maxHeight: '60px',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis'
+                                                        }}>
+                                                            {meeting.summary.substring(0, 150)}...
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        }
 
-       ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
-   </script>
+        ReactDOM.render(<MeetingNotesApp />, document.getElementById('root'));
+    </script>
 </body>
 </html>
