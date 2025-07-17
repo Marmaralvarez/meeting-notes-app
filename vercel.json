@@ -5,37 +5,26 @@
       "destination": "/login.html"
     }
   ],
-  "routes": [
+  "redirects": [
     {
-      "src": "/reset-password",
-      "dest": "/reset-password.html"
+      "source": "/app",
+      "destination": "/app.html",
+      "permanent": false
     },
     {
-      "src": "/app",
-      "dest": "/app.html"
+      "source": "/reset-password",
+      "destination": "/reset-password.html", 
+      "permanent": false
+    },
+    {
+      "source": "/login",
+      "destination": "/login.html",
+      "permanent": false
     }
   ],
   "headers": [
     {
-      "source": "/app.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/login.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/reset-password.html",
+      "source": "/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
