@@ -312,38 +312,32 @@
                 }, []);
 
             const checkAuth = async () => {
-                try {
-                    console.log('Checking authentication...');
-                    
-                    // Clear the just_logged_in flag
-                    sessionStorage.removeItem('just_logged_in');
-                    
-                    const { data: { session }, error } = await supabase.auth.getSession();
-                    
-                    if (error) {
-                        console.error('Session error:', error);
-                        sessionStorage.setItem('came_from_app', 'true');
-                        window.location.href = '/login.html';
-                        return;
-                    }
-                    
-                    if (!session || !session.user) {
-                        console.log('No valid session found, redirecting to login');
-                        sessionStorage.setItem('came_from_app', 'true');
-                        window.location.href = '/login.html';
-                        return;
-                    }
-                    
-                    console.log('Authentication successful for:', session.user.email);
-                    currentUserEmail = session.user.email;
-                    setUserEmail(session.user.email);
+            try {
+                console.log('Checking authentication...');
+                
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    console.error('Session error:', error);
                     setIsCheckingAuth(false);
-                } catch (error) {
-                    console.error('Auth check failed:', error);
-                    sessionStorage.setItem('came_from_app', 'true');
-                    window.location.href = '/login.html';
+                    return;
                 }
-            };
+                
+                if (!session || !session.user) {
+                    console.log('No valid session found');
+                    setIsCheckingAuth(false);
+                    return;
+                }
+                
+                console.log('Authentication successful for:', session.user.email);
+                currentUserEmail = session.user.email;
+                setUserEmail(session.user.email);
+                setIsCheckingAuth(false);
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                setIsCheckingAuth(false);
+            }
+        };
 
             const handleLogout = async () => {
                 try {
