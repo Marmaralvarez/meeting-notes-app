@@ -161,8 +161,6 @@
         
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // Auth state
-        let currentUserEmail = null;
 
         // Enhanced markdown renderer with proper table handling
         const renderMarkdown = (text) => {
@@ -273,128 +271,99 @@
         };
 
         function MeetingNotesApp() {
-            // State management
-            const [files, setFiles] = useState([]);
-            const [rawNotes, setRawNotes] = useState('');
-            const [summary, setSummary] = useState('');
-            const [editableSummary, setEditableSummary] = useState('');
-            const [isEditingMode, setIsEditingMode] = useState(false);
-            const [isGenerating, setIsGenerating] = useState(false);
-            const [isExtracting, setIsExtracting] = useState(false);
-            const [meetingDate, setMeetingDate] = useState('');
-            const [meetingTime, setMeetingTime] = useState('');
-            const [location, setLocation] = useState('');
-            const [meetingTitle, setMeetingTitle] = useState('');
-            const [companyAttendees, setCompanyAttendees] = useState('');
-            const [clientAttendees, setClientAttendees] = useState('');
-            const [client, setClient] = useState(''); // New field
-            const [project, setProject] = useState(''); // New field
-            const [aiError, setAiError] = useState('');
-            const [userEmail, setUserEmail] = useState('');
-            const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+            // ------------ ALL HOOKS UNCONDITIONAL AND TOP-LEVEL -------------
+            // Auth and user state
+                  const [userEmail, setUserEmail] = useState('');
+                  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+            // App state
+                  const [files, setFiles] = useState([]);
+                  const [rawNotes, setRawNotes] = useState('');
+                  const [summary, setSummary] = useState('');
+                  const [editableSummary, setEditableSummary] = useState('');
+                  const [isEditingMode, setIsEditingMode] = useState(false);
+                  const [isGenerating, setIsGenerating] = useState(false);
+                  const [isExtracting, setIsExtracting] = useState(false);
+                  const [meetingDate, setMeetingDate] = useState('');
+                  const [meetingTime, setMeetingTime] = useState('');
+                  const [location, setLocation] = useState('');
+                  const [meetingTitle, setMeetingTitle] = useState('');
+                  const [companyAttendees, setCompanyAttendees] = useState('');
+                  const [clientAttendees, setClientAttendees] = useState('');
+                  const [client, setClient] = useState('');
+                  const [project, setProject] = useState('');
+                  const [aiError, setAiError] = useState('');
+            // Brain
+                  const [storedMeetings, setStoredMeetings] = useState([]);
+                  const [showBrain, setShowBrain] = useState(false);
+                  const [brainQuery, setBrainQuery] = useState('');
+                  const [brainResponse, setBrainResponse] = useState('');
+                  const [isBrainLoading, setIsBrainLoading] = useState(false);
+                  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+                  const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
+                  const [saveError, setSaveError] = useState('');
 
-            // Check authentication on component mount
-                useEffect(() => {
-                    checkAuth();
-                    
-                    // Set up auth state listener
-                    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-                        console.log('Auth state changed:', event, session?.user?.email);
-                        if (event === 'SIGNED_OUT') {
-                            sessionStorage.setItem('came_from_app', 'true');
-                            window.location.href = '/login.html';
-                        }
-                    });
-                    
-                    return () => {
-                        authListener.subscription.unsubscribe();
-                    };
-                }, []);
+            // To store user's email for comparisons (such as meeting.createdBy matching)
+                    let currentUserEmail = userEmail;
 
-            const checkAuth = async () => {
-            try {
-                console.log('Checking authentication...');
-                
-                const { data: { session }, error } = await supabase.auth.getSession();
-                
-                if (!error && session && session.user) {
-                    console.log('Authentication successful for:', session.user.email);
-                    currentUserEmail = session.user.email;
-                    setUserEmail(session.user.email);
-                } else {
-                    console.log('No valid session found');
-                }
-                
-                setIsCheckingAuth(false);
-            } catch (error) {
-                console.error('Auth check failed:', error);
-                setIsCheckingAuth(false);
-            }
-        };
-
-            const handleLogout = async () => {
-                try {
-                    console.log('Logging out...');
-                    await supabase.auth.signOut();
+            // ------------ HOOKS THAT SHOULD BE CALLED IN EVERY RENDER -------------
+              useEffect(() => {
+                checkAuth();
+                const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+                  if (event === 'SIGNED_OUT') {
                     sessionStorage.setItem('came_from_app', 'true');
                     window.location.href = '/login.html';
-                } catch (error) {
-                    console.error('Logout failed:', error);
-                    // Force redirect even if logout fails
-                    sessionStorage.setItem('came_from_app', 'true');
-                    window.location.href = '/login.html';
-                }
-            };
-            
-            // Add loading state at the beginning of the component return
-            if (isCheckingAuth) {
-                return (
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                       height: '100vh',
-                        fontSize: '18px',
-                       color: '#6b7280',
-                        flexDirection: 'column',
-                        gap: '16px'
-                    }}>
-                        <div>🔐 Checking authentication...</div>
-                       <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
-                    </div>
-               );
-             }
+                  }
+                });
+                return () => {
+                  authListener.subscription.unsubscribe();
+                };
+              }, []);
 
-            // Brain functionality
-            const [storedMeetings, setStoredMeetings] = useState([]);
-            const [showBrain, setShowBrain] = useState(false);
-            const [brainQuery, setBrainQuery] = useState('');
-            const [brainResponse, setBrainResponse] = useState('');
-            const [isBrainLoading, setIsBrainLoading] = useState(false);
-            const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-            const [isLoadingMeetings, setIsLoadingMeetings] = useState(false);
-            const [saveError, setSaveError] = useState('');
+              useEffect(() => {
+                if (!isCheckingAuth && userEmail) {
+                  loadMeetingsFromDatabase();
+                }
+              }, [isCheckingAuth, userEmail]);
+
+            // ------------ AUTH LOGIC -------------
+                const checkAuth = async () => {
+                    try {
+                      const { data: { session }, error } = await supabase.auth.getSession();
+                      if (!error && session && session.user) {
+                        currentUserEmail = session.user.email;
+                        setUserEmail(session.user.email);
+                      }
+                      setIsCheckingAuth(false);
+                    } catch (error) {
+                      setIsCheckingAuth(false);
+                    }
+                  };
+
+                const handleLogout = async () => {
+                    try {
+                      await supabase.auth.signOut();
+                      sessionStorage.setItem('came_from_app', 'true');
+                      window.location.href = '/login.html';
+                    } catch (error) {
+                      sessionStorage.setItem('came_from_app', 'true');
+                      window.location.href = '/login.html';
+                    }
+                  };
 
             // API endpoints
-            const API_BASE_URL = 'https://meeting-notes-api-watertrace.vercel.app/api';
+                const API_BASE_URL = 'https://meeting-notes-api-watertrace.vercel.app/api';
 
-            useEffect(() => {
-                if (!isCheckingAuth && userEmail) {
-                    loadMeetingsFromDatabase();
-                }
-            }, [isCheckingAuth, userEmail]);
-
-            const loadMeetingsFromDatabase = async () => {
-                setIsLoadingMeetings(true);
-                try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) {
-                        console.log('No session for loading meetings');
-                        return; // Don't redirect, just return
-                    }
+                const loadMeetingsFromDatabase = async () => {
+                    setIsLoadingMeetings(true);
+                        try {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (!session) {
+                                console.log('No session for loading meetings');
+                                return; // Don't redirect, just return
+                            }
                     
-                    const response = await fetch(`${API_BASE_URL}/meetings`, {
-                        headers: {
+                        const response = await fetch(`${API_BASE_URL}/meetings`, {
+                            headers: {
                             'Authorization': `Bearer ${session.access_token}`
                         }
                     });
@@ -421,16 +390,16 @@
                             console.log('Unauthorized - session may have expired');
                             // Don't redirect here, let the main auth check handle it
                         }
-                } catch (error) {
-                    console.error('Error loading meetings:', error);
-                } finally {
-                    setIsLoadingMeetings(false);
-                }
-            };
+                        } catch (error) {
+                            console.error('Error loading meetings:', error);
+                        } finally {
+                            setIsLoadingMeetings(false);
+                        }
+                    };
 
-            const saveMeetingToDatabase = async (meetingRecord) => {
-                try {
-                    console.log('=== SAVING TO DATABASE ===');
+                    const saveMeetingToDatabase = async (meetingRecord) => {
+                        try {
+                            console.log('=== SAVING TO DATABASE ===');
                     
                     // Get the current session for auth header
                     const { data: { session } } = await supabase.auth.getSession();
@@ -452,48 +421,48 @@
                         raw_notes: meetingRecord.rawNotes,
                         summary: meetingRecord.summary,
                         created_at: meetingRecord.createdAt
+                        };
+                        
+                        console.log('Payload to send:', payload);
+                        console.log('Summary length:', payload.summary.length);
+                        console.log('Raw notes length:', payload.raw_notes.length);
+                        
+                        const response = await fetch(`${API_BASE_URL}/meetings`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                            },
+                            body: JSON.stringify(payload)
+                        });
+                        
+                        console.log('Response status:', response.status);
+                        
+                        const responseText = await response.text();
+                        console.log('Response text:', responseText);
+                        
+                        if (response.ok) {
+                            const parsedResponse = JSON.parse(responseText);
+                            console.log('✅ Save successful:', parsedResponse);
+                            return parsedResponse;
+                        } else {
+                            console.error('❌ HTTP Error:', response.status);
+                            console.error('Error response:', responseText);
+                            throw new Error(`Database API returned ${response.status}: ${responseText}`);
+                        }
+                        } catch (error) {
+                            console.error('❌ Save error:', error);
+                            throw new Error(`Failed to save meeting: ${error.message}`);
+                        }
                     };
-                    
-                    console.log('Payload to send:', payload);
-                    console.log('Summary length:', payload.summary.length);
-                    console.log('Raw notes length:', payload.raw_notes.length);
-                    
-                    const response = await fetch(`${API_BASE_URL}/meetings`, {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
-                        },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    console.log('Response status:', response.status);
-                    
-                    const responseText = await response.text();
-                    console.log('Response text:', responseText);
-                    
-                    if (response.ok) {
-                        const parsedResponse = JSON.parse(responseText);
-                        console.log('✅ Save successful:', parsedResponse);
-                        return parsedResponse;
-                    } else {
-                        console.error('❌ HTTP Error:', response.status);
-                        console.error('Error response:', responseText);
-                        throw new Error(`Database API returned ${response.status}: ${responseText}`);
-                    }
-                } catch (error) {
-                    console.error('❌ Save error:', error);
-                    throw new Error(`Failed to save meeting: ${error.message}`);
-                }
-            };
 
-            const deleteMeetingFromDatabase = async (id) => {
-                try {
-                    // Get the current session for auth header
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) {
-                        throw new Error('Not authenticated');
-                    }
+                    const deleteMeetingFromDatabase = async (id) => {
+                        try {
+                            // Get the current session for auth header
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (!session) {
+                                throw new Error('Not authenticated');
+                            }
                     
                     const response = await fetch(`${API_BASE_URL}/meetings?id=${id}`, {
                         method: 'DELETE',
@@ -503,68 +472,88 @@
                         }
                     });
                     
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                } catch (error) {
-                    throw error;
-                }
-            };
-
-            const callAI = async (type, content, prompt = '') => {
-                try {
-                    // Get the current session for auth header
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) {
-                        throw new Error('Not authenticated');
-                    }
-                    
-                    console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
-                    const response = await fetch(`${API_BASE_URL}/ai`, {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
-                        },
-                        body: JSON.stringify({
-                            type,
-                            content,
-                            prompt
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || `HTTP ${response.status}`);
-                    }
-
-                    const data = await response.json();
-                    console.log(`AI response for ${type}:`, data.result);
-                    return data.result;
-                } catch (error) {
-                    console.error('AI API Error:', error);
-                    throw error;
-                }
-            };
-
-            const handleBrainQueryWithAI = async () => {
-                if (!brainQuery.trim() || storedMeetings.length === 0) return;
-
-                setIsBrainLoading(true);
-                setBrainResponse('');
-
-                try {
-                    // Get the current session for auth header
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!session) {
-                        throw new Error('Not authenticated');
-                    }
-                    
-                    const response = await fetch(`${API_BASE_URL}/meetings`, {
-                        headers: {
-                            'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
                         }
-                    });
+                    } catch (error) {
+                        throw error;
+                    }
+                };
+
+                    const callAI = async (type, content, prompt = '') => {
+                        try {
+                            // Get the current session for auth header
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (!session) {
+                                throw new Error('Not authenticated');
+                            }
+                            
+                            console.log(`Calling AI with type: ${type}, content length: ${content.length}`);
+                            const response = await fetch(`${API_BASE_URL}/ai`, {
+                                method: 'POST',
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                                },
+                                body: JSON.stringify({
+                                    type,
+                                    content,
+                                    prompt
+                                })
+                            });
+
+                            if (!response.ok) {
+                                const errorData = await response.json();
+                                throw new Error(errorData.error || `HTTP ${response.status}`);
+                            }
+
+                            const data = await response.json();
+                            console.log(`AI response for ${type}:`, data.result);
+                            return data.result;
+                        } catch (error) {
+                            console.error('AI API Error:', error);
+                            throw error;
+                        }
+                    };
+            
+                  // ------------- EARLY RETURN (after ALL hooks are declared) -------------
+                  if (isCheckingAuth) {
+                    return (
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100vh',
+                        fontSize: '18px',
+                        color: '#6b7280',
+                        flexDirection: 'column',
+                        gap: '16px'
+                      }}>
+                        <div>🔐 Checking authentication...</div>
+                        <div style={{ fontSize: '14px' }}>If this takes too long, please refresh the page.</div>
+                      </div>
+                    );
+                  }
+
+
+                    const handleBrainQueryWithAI = async () => {
+                    if (!brainQuery.trim() || storedMeetings.length === 0) return;
+
+                    setIsBrainLoading(true);
+                    setBrainResponse('');
+
+                    try {
+                        // Get the current session for auth header
+                        const { data: { session } } = await supabase.auth.getSession();
+                        if (!session) {
+                            throw new Error('Not authenticated');
+                        }
+                        
+                        const response = await fetch(`${API_BASE_URL}/meetings`, {
+                            headers: {
+                                'Authorization': `Bearer ${session.access_token}`  // Added auth header
+                            }
+                        });
                     
                     let meetingsForQuery = storedMeetings;
                     
@@ -588,12 +577,12 @@
 
                     const meetingData = meetingsForQuery.map(meeting => 
                         `Meeting: ${meeting.title} (${meeting.date})
-Location: ${meeting.venue || 'Not specified'}
-Client: ${meeting.client || 'Not specified'}
-Project: ${meeting.project || 'Not specified'}
-Attendees: ${meeting.companyAttendees || ''} ${meeting.clientAttendees || ''}
-Summary: ${meeting.summary}
----`
+                        Location: ${meeting.venue || 'Not specified'}
+                        Client: ${meeting.client || 'Not specified'}
+                        Project: ${meeting.project || 'Not specified'}
+                        Attendees: ${meeting.companyAttendees || ''} ${meeting.clientAttendees || ''}
+                        Summary: ${meeting.summary}
+                        ---`
                     ).join('\n\n');
 
                     const queryContext = `You have access to ${meetingsForQuery.length} stored meetings. Here's the data:
@@ -757,16 +746,16 @@ User Question: ${brainQuery}`;
                     };
                     
                     const contextString = `Meeting: ${meetingContext.title}
-Date: ${meetingContext.date || 'Not specified'}
-Time: ${meetingContext.time || 'Not specified'}
-Location: ${meetingContext.location || 'Not specified'}
-Client: ${meetingContext.client || 'Not specified'}
-Project: ${meetingContext.project || 'Not specified'}
-Company Attendees: ${meetingContext.companyAttendees || 'Not specified'}
-Client Attendees: ${meetingContext.clientAttendees || 'Not specified'}
+                    Date: ${meetingContext.date || 'Not specified'}
+                    Time: ${meetingContext.time || 'Not specified'}
+                    Location: ${meetingContext.location || 'Not specified'}
+                    Client: ${meetingContext.client || 'Not specified'}
+                    Project: ${meetingContext.project || 'Not specified'}
+                    Company Attendees: ${meetingContext.companyAttendees || 'Not specified'}
+                    Client Attendees: ${meetingContext.clientAttendees || 'Not specified'}
 
-Meeting Content:
-${meetingContext.content}`;
+                    Meeting Content:
+                    ${meetingContext.content}`;
                     
                     const generatedSummary = await callAI('summarize', contextString);
                     setSummary(generatedSummary);
@@ -880,15 +869,15 @@ ${meetingContext.content}`;
             const exportSummary = () => {
                 const summaryToExport = isEditingMode ? editableSummary : summary;
                 const meetingInfo = `Meeting: ${meetingTitle || 'Untitled Meeting'}
-Date: ${meetingDate || 'Not specified'}
-Time: ${meetingTime || 'Not specified'}
-Location: ${location || 'Not specified'}
-Client: ${client || 'Not specified'}
-Project: ${project || 'Not specified'}
-Company Attendees: ${companyAttendees || 'Not specified'}
-Client Attendees: ${clientAttendees || 'Not specified'}
+                                    Date: ${meetingDate || 'Not specified'}
+                                    Time: ${meetingTime || 'Not specified'}
+                                    Location: ${location || 'Not specified'}
+                                    Client: ${client || 'Not specified'}
+                                    Project: ${project || 'Not specified'}
+                                    Company Attendees: ${companyAttendees || 'Not specified'}
+                                    Client Attendees: ${clientAttendees || 'Not specified'}
 
-${summaryToExport}`;
+                                    ${summaryToExport}`;
 
                 const blob = new Blob([meetingInfo], { type: 'text/plain' });
                 const url = URL.createObjectURL(blob);
