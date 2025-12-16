@@ -285,9 +285,11 @@
 
                     if (result.error) throw result.error;
 
-                    console.log('Login successful, redirecting to app...');
-                    // Small delay to ensure session is fully synced before redirect
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    console.log('Login successful, session:', result.data.session ? 'present' : 'missing');
+                    console.log('Waiting for session to sync...');
+                    // Delay to ensure session is fully synced to storage before redirect
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    console.log('Redirecting to app...');
                     window.location.href = '/app.html';
                 }
             } catch (error) {

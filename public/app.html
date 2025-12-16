@@ -328,7 +328,13 @@
             // ------------ AUTH LOGIC -------------
                 const checkAuth = async () => {
                     try {
+                      // Add small delay to ensure Supabase client is fully initialized
+                      await new Promise(resolve => setTimeout(resolve, 200));
+
+                      console.log('Checking authentication...');
                       const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+                      console.log('Session check result:', { session: !!session, error: !!error, user: session?.user?.email });
 
                       if (error) {
                         console.error('Session error:', error);
