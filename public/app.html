@@ -329,13 +329,29 @@
                 const checkAuth = async () => {
                     try {
                       const { data: { session }, error } = await supabase.auth.getSession();
-                      if (!error && session && session.user) {
-                        currentUserEmail = session.user.email;
-                        setUserEmail(session.user.email);
+
+                      if (error) {
+                        console.error('Session error:', error);
+                        sessionStorage.setItem('came_from_app', 'true');
+                        window.location.href = '/login.html';
+                        return;
                       }
+
+                      if (!session || !session.user) {
+                        console.log('No valid session found, redirecting to login');
+                        sessionStorage.setItem('came_from_app', 'true');
+                        window.location.href = '/login.html';
+                        return;
+                      }
+
+                      console.log('Authentication successful for:', session.user.email);
+                      currentUserEmail = session.user.email;
+                      setUserEmail(session.user.email);
                       setIsCheckingAuth(false);
                     } catch (error) {
-                      setIsCheckingAuth(false);
+                      console.error('Auth check failed:', error);
+                      sessionStorage.setItem('came_from_app', 'true');
+                      window.location.href = '/login.html';
                     }
                   };
 
@@ -359,15 +375,17 @@
                             const { data: { session } } = await supabase.auth.getSession();
                             if (!session) {
                                 console.log('No session for loading meetings');
-                                return; // Don't redirect, just return
+                                sessionStorage.setItem('came_from_app', 'true');
+                                window.location.href = '/login.html';
+                                return;
                             }
-                    
+
                         const response = await fetch(`${API_BASE_URL}/meetings`, {
                             headers: {
                             'Authorization': `Bearer ${session.access_token}`
                         }
                     });
-                    
+
                     if (response.ok) {
                         const meetings = await response.json();
                         const appFormatMeetings = meetings.map(meeting => ({
@@ -387,8 +405,9 @@
                         }));
                         setStoredMeetings(appFormatMeetings);
                         } else if (response.status === 401) {
-                            console.log('Unauthorized - session may have expired');
-                            // Don't redirect here, let the main auth check handle it
+                            console.log('Unauthorized - session expired, redirecting to login');
+                            sessionStorage.setItem('came_from_app', 'true');
+                            window.location.href = '/login.html';
                         }
                         } catch (error) {
                             console.error('Error loading meetings:', error);
