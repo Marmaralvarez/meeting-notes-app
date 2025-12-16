@@ -282,10 +282,12 @@
                         email,
                         password,
                     });
-                    
+
                     if (result.error) throw result.error;
-                    
+
                     console.log('Login successful, redirecting to app...');
+                    // Small delay to ensure session is fully synced before redirect
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     window.location.href = '/app.html';
                 }
             } catch (error) {
@@ -325,13 +327,21 @@
         // Check if user is already logged in
         async function checkAuth() {
             try {
+                // Don't auto-redirect if we just came from app (prevents redirect loop)
+                const cameFromApp = sessionStorage.getItem('came_from_app');
+                if (cameFromApp) {
+                    sessionStorage.removeItem('came_from_app');
+                    console.log('Came from app, staying on login page');
+                    return;
+                }
+
                 const { data: { session }, error } = await supabaseClient.auth.getSession();
-                
+
                 if (error) {
                     console.error('Session check error:', error);
                     return;
                 }
-                
+
                 if (session && session.user) {
                     console.log('User already logged in, redirecting...');
                     window.location.href = '/app.html';
@@ -340,7 +350,7 @@
                 console.error('Auth check failed:', error);
             }
         }
-        
+
         // Check auth on page load
         checkAuth();
     </script>
