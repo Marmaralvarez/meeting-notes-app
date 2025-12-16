@@ -1,9 +1,25 @@
 const fs = require('fs');
+const path = require('path');
 
-// Read the HTML files
-let loginHtml = fs.readFileSync('./public/login.html', 'utf8');
-let appHtml = fs.readFileSync('./public/app.html', 'utf8');
-let resetHtml = fs.readFileSync('./public/reset-password.html', 'utf8');
+// Determine output directory (Vercel uses .vercel/output/static, local uses public)
+const isVercel = process.env.VERCEL === '1';
+const outputDir = isVercel ? '.vercel/output/static' : './public';
+const inputDir = './public';
+
+console.log('Build environment:', isVercel ? 'Vercel' : 'Local');
+console.log('Input directory:', inputDir);
+console.log('Output directory:', outputDir);
+
+// Create output directory if it doesn't exist (for Vercel)
+if (isVercel && !fs.existsSync(outputDir)) {
+  fs.mkdirSync(outputDir, { recursive: true });
+  console.log('Created output directory:', outputDir);
+}
+
+// Read the HTML files from input directory
+let loginHtml = fs.readFileSync(path.join(inputDir, 'login.html'), 'utf8');
+let appHtml = fs.readFileSync(path.join(inputDir, 'app.html'), 'utf8');
+let resetHtml = fs.readFileSync(path.join(inputDir, 'reset-password.html'), 'utf8');
 
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -29,9 +45,17 @@ appHtml = appHtml.replace(/YOUR_SUPABASE_ANON_KEY/g, supabaseAnonKey);
 resetHtml = resetHtml.replace(/YOUR_SUPABASE_URL/g, supabaseUrl);
 resetHtml = resetHtml.replace(/YOUR_SUPABASE_ANON_KEY/g, supabaseAnonKey);
 
-// Write the files back
-fs.writeFileSync('./public/login.html', loginHtml);
-fs.writeFileSync('./public/app.html', appHtml);
-fs.writeFileSync('./public/reset-password.html', resetHtml);
+// Write the files to output directory
+fs.writeFileSync(path.join(outputDir, 'login.html'), loginHtml);
+fs.writeFileSync(path.join(outputDir, 'app.html'), appHtml);
+fs.writeFileSync(path.join(outputDir, 'reset-password.html'), resetHtml);
+
+// Copy favicon if exists
+const faviconPath = path.join(inputDir, 'favicon.ico');
+if (fs.existsSync(faviconPath)) {
+  fs.copyFileSync(faviconPath, path.join(outputDir, 'favicon.ico'));
+  console.log('Copied favicon.ico');
+}
 
 console.log('✅ Build complete! Environment variables injected into HTML files.');
+console.log('✅ Output written to:', outputDir);
