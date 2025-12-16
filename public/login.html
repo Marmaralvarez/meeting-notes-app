@@ -278,6 +278,7 @@
                     // Clear form
                     form.reset();
                 } else {
+                    // Sign in
                     result = await supabaseClient.auth.signInWithPassword({
                         email,
                         password,
@@ -285,8 +286,15 @@
 
                     if (result.error) throw result.error;
 
-                    console.log('Login successful, redirecting to app...');
-                    window.location.href = '/app.html';
+                    // Wait for auth state to synchronize before redirecting
+                    // The session is in the result, so we can redirect immediately
+                    // Supabase handles localStorage persistence automatically
+                    if (result.data.session) {
+                        console.log('Login successful, session confirmed, redirecting...');
+                        window.location.href = '/app.html';
+                    } else {
+                        throw new Error('Login succeeded but no session returned');
+                    }
                 }
             } catch (error) {
                 console.error('Auth error:', error);
