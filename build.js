@@ -57,5 +57,25 @@ if (fs.existsSync(faviconPath)) {
   console.log('Copied favicon.ico');
 }
 
+// Create Vercel Build Output API config if on Vercel
+if (isVercel) {
+  const configDir = '.vercel/output';
+  const config = {
+    version: 3,
+    routes: [
+      { src: '/', dest: '/login.html' },
+      { src: '/app', dest: '/app.html' },
+      { src: '/login', dest: '/login.html' },
+      { src: '/reset-password', dest: '/reset-password.html' }
+    ]
+  };
+
+  fs.writeFileSync(
+    path.join(configDir, 'config.json'),
+    JSON.stringify(config, null, 2)
+  );
+  console.log('Created Vercel config.json');
+}
+
 console.log('✅ Build complete! Environment variables injected into HTML files.');
 console.log('✅ Output written to:', outputDir);
