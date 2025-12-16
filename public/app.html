@@ -158,8 +158,8 @@
         const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced with env variable
         
         console.log('App initializing with Supabase URL:', SUPABASE_URL);
-        
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 
         // Enhanced markdown renderer with proper table handling
@@ -308,7 +308,7 @@
             // ------------ HOOKS THAT SHOULD BE CALLED IN EVERY RENDER -------------
               useEffect(() => {
                 checkAuth();
-                const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+                const { data: authListener } = supabaseClient.auth.onAuthStateChange((event, session) => {
                   if (event === 'SIGNED_OUT') {
                     sessionStorage.setItem('came_from_app', 'true');
                     window.location.href = '/login.html';
@@ -328,7 +328,7 @@
             // ------------ AUTH LOGIC -------------
                 const checkAuth = async () => {
                     try {
-                      const { data: { session }, error } = await supabase.auth.getSession();
+                      const { data: { session }, error } = await supabaseClient.auth.getSession();
 
                       if (error) {
                         console.error('Session error:', error);
@@ -357,7 +357,7 @@
 
                 const handleLogout = async () => {
                     try {
-                      await supabase.auth.signOut();
+                      await supabaseClient.auth.signOut();
                       sessionStorage.setItem('came_from_app', 'true');
                       window.location.href = '/login.html';
                     } catch (error) {
@@ -372,7 +372,7 @@
                 const loadMeetingsFromDatabase = async () => {
                     setIsLoadingMeetings(true);
                         try {
-                            const { data: { session } } = await supabase.auth.getSession();
+                            const { data: { session } } = await supabaseClient.auth.getSession();
                             if (!session) {
                                 console.log('No session for loading meetings');
                                 sessionStorage.setItem('came_from_app', 'true');
@@ -421,7 +421,7 @@
                             console.log('=== SAVING TO DATABASE ===');
                     
                     // Get the current session for auth header
-                    const { data: { session } } = await supabase.auth.getSession();
+                    const { data: { session } } = await supabaseClient.auth.getSession();
                     if (!session) {
                         throw new Error('Not authenticated');
                     }
@@ -478,7 +478,7 @@
                     const deleteMeetingFromDatabase = async (id) => {
                         try {
                             // Get the current session for auth header
-                            const { data: { session } } = await supabase.auth.getSession();
+                            const { data: { session } } = await supabaseClient.auth.getSession();
                             if (!session) {
                                 throw new Error('Not authenticated');
                             }
@@ -502,7 +502,7 @@
                     const callAI = async (type, content, prompt = '') => {
                         try {
                             // Get the current session for auth header
-                            const { data: { session } } = await supabase.auth.getSession();
+                            const { data: { session } } = await supabaseClient.auth.getSession();
                             if (!session) {
                                 throw new Error('Not authenticated');
                             }
@@ -563,7 +563,7 @@
 
                     try {
                         // Get the current session for auth header
-                        const { data: { session } } = await supabase.auth.getSession();
+                        const { data: { session } } = await supabaseClient.auth.getSession();
                         if (!session) {
                             throw new Error('Not authenticated');
                         }

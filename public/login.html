@@ -192,10 +192,10 @@
         // Supabase initialization
         const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced by build
         const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced by build
-        
+
         console.log('Initializing Supabase with URL:', SUPABASE_URL);
-        
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // UI elements
         const form = document.getElementById('auth-form');
@@ -267,7 +267,7 @@
                 let result;
                 
                 if (isSignUp) {
-                    result = await supabase.auth.signUp({
+                    result = await supabaseClient.auth.signUp({
                         email,
                         password,
                     });
@@ -278,7 +278,7 @@
                     // Clear form
                     form.reset();
                 } else {
-                    result = await supabase.auth.signInWithPassword({
+                    result = await supabaseClient.auth.signInWithPassword({
                         email,
                         password,
                     });
@@ -310,7 +310,7 @@
             }
             
             try {
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
                     redirectTo: `${window.location.origin}/reset-password`,
                 });
                 
@@ -325,7 +325,7 @@
         // Check if user is already logged in
         async function checkAuth() {
             try {
-                const { data: { session }, error } = await supabase.auth.getSession();
+                const { data: { session }, error } = await supabaseClient.auth.getSession();
                 
                 if (error) {
                     console.error('Session check error:', error);
