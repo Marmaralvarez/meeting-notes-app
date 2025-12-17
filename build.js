@@ -23,7 +23,7 @@ let resetHtml = fs.readFileSync(path.join(inputDir, 'reset-password.html'), 'utf
 
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
 
 console.log('Building with Supabase URL:', supabaseUrl ? 'Present' : 'Missing');
 console.log('Building with Anon Key:', supabaseAnonKey ? 'Present' : 'Missing');
