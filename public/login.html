@@ -190,8 +190,8 @@
 
     <script>
         // Supabase initialization
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Will be replaced by build
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Will be replaced by build
+        const SUPABASE_URL = 'https://quowetoinybkfxakmvkl.supabase.co'; // Will be replaced by build
+        const SUPABASE_ANON_KEY = 'sb_publishable_3CYrC1eKIFGDm1K5t_ATgw_cMJhPSfv'; // Will be replaced by build
         
         console.log('Initializing Supabase with URL:', SUPABASE_URL);
         
@@ -311,7 +311,7 @@
             
             try {
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/reset-password`,
+                    redirectTo: `${window.location.origin}/reset-password.html`,
                 });
                 
                 if (error) throw error;
