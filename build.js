@@ -7,7 +7,7 @@ let resetHtml = fs.readFileSync('./public/reset-password.html', 'utf8');
 
 // Get environment variables
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
 
 console.log('Building with Supabase URL:', supabaseUrl ? 'Present' : 'Missing');
 console.log('Building with Anon Key:', supabaseAnonKey ? 'Present' : 'Missing');
@@ -15,7 +15,7 @@ console.log('Building with Anon Key:', supabaseAnonKey ? 'Present' : 'Missing');
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing environment variables!');
   console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'SET' : 'MISSING');
-  console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
+  console.error('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
   process.exit(1);
 }
 
